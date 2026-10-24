@@ -150,6 +150,344 @@ function watt(){metric(D.metrics.slice(1));const g=grid();figure(g,F[0],'Shift t
 
 function foodDemo(){metric(D.metrics);const g=grid();const map=copy(F[0]);const tr=map.data[0];tr.type='scatter';tr.x=tr.lon;tr.y=tr.lat;tr.mode='markers';tr.marker={size:14,color:tr.marker?.color,colorscale:[[0,T.colors[1]],[1,T.accent]],cmin:.5,cmax:1,colorbar:{title:{text:'Model score'},thickness:10}};delete tr.lat;delete tr.lon;delete tr.subplot;delete tr.hovertemplate;tr.hovertemplate='%{text}<br>Approximate location<extra></extra>';tr.text=values(tr.hovertext).length?tr.hovertext:tr.text;map.layout={xaxis:{title:{text:'Longitude · degrees'},tickformat:'.3f'},yaxis:{title:{text:'Latitude · degrees'},tickformat:'.3f',scaleanchor:'x',scaleratio:1},showlegend:false};figure(g,map,'A campus field map','Offline coordinate map · source pins are jittered around named campus locations. No walking routes or exact event rooms are inferred.','wide primary quest-map','map');const p=panel('Demonstration quest listings','Seeded week of 12–18 Oct 2026. Food is a classifier prediction, not a verified offer.','narrow quest-listings','events');g.append(p);const controls=el('div','controls'),search=el('input');search.type='search';search.placeholder='Search title, club or food…';search.setAttribute('aria-label','Search demonstration events');const lab=el('label','','Search demonstrations');lab.append(search);controls.append(lab);p.append(controls);const watch=el('button','','Show watchlist');watch.setAttribute('aria-pressed','false');controls.append(watch);const list=el('div','event-list');p.append(list);const cols=F[1].data[0].cells.values,rows=cols[0].map((_,i)=>cols.map(c=>c[i]));let only=false;const saved=new Set();try{JSON.parse(localStorage.getItem('quest-watchlist')||'[]').forEach(x=>saved.add(x))}catch{}function render(){list.replaceChildren();const q=search.value.toLowerCase();let count=0;rows.forEach((r,i)=>{if(only&&!saved.has(r[1])||q&&!r.join(' ').toLowerCase().includes(q))return;count++;const e=el('article','event');e.append(el('span','badge','DEMONSTRATION'),el('h3','',r[1]),el('p','',r[2]+' · '+r[3]),el('p','',r[4]+' · timezone not recorded'),el('p','confidence',r[5]+' model probability · EV '+r[6]),el('p','caption','Food terms: '+r[7]));const b=el('button','',saved.has(r[1])?'Remove from watchlist':'Save to watchlist');b.onclick=()=>{saved.has(r[1])?saved.delete(r[1]):saved.add(r[1]);try{localStorage.setItem('quest-watchlist',JSON.stringify([...saved]))}catch{}render()};e.append(b);list.append(e)});if(!count)list.append(el('p','caption',only?'Your watchlist has no matching events. Save a demonstration event to try it.':'No matching demonstration events. Try another search.'));document.getElementById('status').textContent=count+' demonstration listings shown'}watch.onclick=()=>{only=!only;watch.setAttribute('aria-pressed',only);watch.textContent=only?'Show all demonstrations':'Show watchlist';render()};search.oninput=render;render();figure(g,F[2],'How well does the classifier perform?','Held-out labeled text test split. These metrics do not verify event attendance, food availability or current campus coverage.','wide','model');figure(g,F[3],'Does confidence match frequency?','Held-out calibration observations. A probability estimate is not a guarantee.','narrow');figure(g,F[4],'Club activity in the demonstration','Counts within the seeded data only.','wide','activity');figure(g,F[5],'Demonstration timing patterns','This is a seeded activity distribution, not historical measured campus activity.','narrow');note('No live feed is operating in this offline demonstration. SB Engaged automation was excluded at your request. Demonstration source URLs are not shown as verified event links. Watchlist changes stay in this browser. Only the source ranked top 15 entries are available in this ranked view.')}
 
+const BUILDING_PINS = [
+  {
+    "key": "sac",
+    "name": "Student Activities Center (SAC)",
+    "lat": 40.91433,
+    "lon": -73.12375,
+    "match": "location starts with 'sac ' or is 'sac'"
+  },
+  {
+    "key": "union",
+    "name": "Student Union",
+    "lat": 40.917053,
+    "lon": -73.122478,
+    "match": "contains 'student union' or starts with 'union '"
+  },
+  {
+    "key": "reccenter",
+    "name": "Walter J. Hawrys Campus Recreation Center",
+    "lat": 40.91715,
+    "lon": -73.12366,
+    "match": "contains 'recreation center' or 'rec center' or 'mac courts'"
+  },
+  {
+    "key": "melville",
+    "name": "Melville Library",
+    "lat": 40.915455,
+    "lon": -73.122608,
+    "match": "contains 'melville library' or 'frank melville'"
+  },
+  {
+    "key": "southp",
+    "name": "South P Lot",
+    "lat": 40.89797,
+    "lon": -73.12601,
+    "match": "contains 'south p' or 'lot 40'"
+  },
+  {
+    "key": "hsc",
+    "name": "Health Sciences Center",
+    "lat": 40.909791,
+    "lon": -73.116176,
+    "match": "contains 'health science' or starts with 'hsc'"
+  },
+  {
+    "key": "staller",
+    "name": "Staller Center for the Arts",
+    "lat": 40.91606,
+    "lon": -73.12142,
+    "match": "contains 'staller'"
+  },
+  {
+    "key": "frey",
+    "name": "Frey Hall",
+    "lat": 40.915586,
+    "lon": -73.123882,
+    "match": "starts with 'frey'"
+  },
+  {
+    "key": "track",
+    "name": "Stony Brook Track",
+    "lat": 40.91854,
+    "lon": -73.12371,
+    "match": "contains 'stony brook track' or 'lavalle'"
+  },
+  {
+    "key": "bauman",
+    "name": "Bauman Center",
+    "lat": 40.91923,
+    "lon": -73.11788,
+    "match": "contains 'bauman'"
+  },
+  {
+    "key": "usg",
+    "name": "USG Office",
+    "lat": 40.91433,
+    "lon": -73.12375,
+    "match": "contains 'usg office'"
+  },
+  {
+    "key": "oldcs",
+    "name": "Old Computer Science Building",
+    "lat": 40.912201,
+    "lon": -73.122482,
+    "match": "contains 'old cs'"
+  },
+  {
+    "key": "eastside",
+    "name": "East Side Dining",
+    "lat": 40.91667,
+    "lon": -73.12094,
+    "match": "contains 'east side dining'"
+  },
+  {
+    "key": "gershwin",
+    "name": "Gershwin Lounge",
+    "lat": 40.91006,
+    "lon": -73.12232,
+    "match": "contains 'gershwin'"
+  },
+  {
+    "key": "keller",
+    "name": "Keller Hall",
+    "lat": 40.912,
+    "lon": -73.13012,
+    "match": "contains 'keller'"
+  },
+  {
+    "key": "ess",
+    "name": "Earth and Space Sciences Building",
+    "lat": 40.914837,
+    "lon": -73.125588,
+    "match": "contains 'earth and space sciences'"
+  },
+  {
+    "key": "chemistry",
+    "name": "Chemistry Building",
+    "lat": 40.916538,
+    "lon": -73.123646,
+    "match": "contains 'chemistry'"
+  },
+  {
+    "key": "benedict",
+    "name": "Benedict Hall",
+    "lat": 40.91923,
+    "lon": -73.11788,
+    "match": "contains 'benedict'"
+  },
+  {
+    "key": "tabler",
+    "name": "Tabler Arts Center",
+    "lat": 40.90970684978704,
+    "lon": -73.12695479613687,
+    "match": "contains 'tabler' or the string carries a lat,lon pair (use the pair)"
+  },
+  {
+    "key": "wagner",
+    "name": "Wagner Hall",
+    "lat": 40.91237,
+    "lon": -73.13078,
+    "match": "contains 'wagner'"
+  },
+  {
+    "key": "oneill",
+    "name": "O'Neill Lounge",
+    "lat": 40.91841,
+    "lon": -73.1195,
+    "match": "contains 'o'neill' or 'o'niell'"
+  },
+  {
+    "key": "avram",
+    "name": "Avram Theatre",
+    "lat": 40.886553,
+    "lon": -72.443418,
+    "match": "contains 'avram'"
+  },
+  {
+    "key": "humanities",
+    "name": "Humanities Building",
+    "lat": 40.914244,
+    "lon": -73.120608,
+    "match": "contains 'humane' or 'humanities'"
+  },
+  {
+    "key": "hendrix",
+    "name": "Hendrix Hall",
+    "lat": 40.91182,
+    "lon": -73.1231,
+    "match": "contains 'hendrix'"
+  },
+  {
+    "key": "douglass",
+    "name": "Douglass Hall",
+    "lat": 40.9091,
+    "lon": -73.1265,
+    "match": "contains 'douglass'"
+  },
+  {
+    "key": "devries",
+    "name": "deVries Hall",
+    "lat": 40.912,
+    "lon": -73.13012,
+    "match": "contains 'devries'"
+  },
+  {
+    "key": "stimson",
+    "name": "Stimson Hall",
+    "lat": 40.91197,
+    "lon": -73.12916,
+    "match": "contains 'stimson'"
+  },
+  {
+    "key": "lifesci",
+    "name": "Life Sciences Building",
+    "lat": 40.911501,
+    "lon": -73.120188,
+    "match": "contains 'life sciences building'"
+  },
+  {
+    "key": "shore",
+    "name": "The Shore Club (SAC 169)",
+    "lat": 40.91433,
+    "lon": -73.12375,
+    "match": "contains 'shore club'"
+  },
+  {
+    "key": "loft",
+    "name": "The Loft (SAC)",
+    "lat": 40.91433,
+    "lon": -73.12375,
+    "match": "location is 'the loft'"
+  },
+  {
+    "key": "southampton_student_center",
+    "name": "Stony Brook Southampton Student Center",
+    "lat": 40.889055,
+    "lon": -72.444805,
+    "match": "contains 'southampton student center'"
+  },
+  {
+    "key": "southampton_chancellors",
+    "name": "Chancellor's Hall, Stony Brook Southampton",
+    "lat": 40.889055,
+    "lon": -72.444805,
+    "match": "contains 'chancellor's hall' and 'southampton'"
+  },
+  {
+    "key": "portjeff",
+    "name": "Port Jefferson Village",
+    "lat": 40.94611,
+    "lon": -73.06222,
+    "match": "contains 'port jefferson'"
+  },
+  {
+    "key": "rinx",
+    "name": "The Rinx",
+    "lat": 40.82273,
+    "lon": -73.16468,
+    "match": "contains 'rinx' or '660 terry'"
+  },
+  {
+    "key": "anaheim",
+    "name": "Anaheim Convention Center",
+    "lat": 33.800667,
+    "lon": -117.920744,
+    "match": "contains 'anaheim'"
+  }
+];
+
+// Ordered predicates correspond one-to-one to the supplied table. No geocoding.
+const BUILDING_MATCHERS = [
+ s=>s==='sac'||s.startsWith('sac '),
+ s=>s.includes('student union')||s.startsWith('union '),
+ s=>['recreation center','rec center','mac courts'].some(x=>s.includes(x)),
+ s=>s.includes('melville library')||s.includes('frank melville'),
+ s=>s.includes('south p')||s.includes('lot 40'),
+ s=>s.includes('health science')||s.startsWith('hsc'),
+ s=>s.includes('staller'),s=>s.startsWith('frey'),
+ s=>s.includes('stony brook track')||s.includes('lavalle'),
+ s=>s.includes('bauman'),s=>s.includes('usg office'),s=>s.includes('old cs'),
+ s=>s.includes('east side dining'),s=>s.includes('gershwin'),s=>s.includes('keller'),
+ s=>s.includes('earth and space sciences'),s=>s.includes('chemistry'),s=>s.includes('benedict'),
+ s=>s.includes('tabler'),s=>s.includes('wagner'),s=>s.includes("o'neill")||s.includes("o'niell"),
+ s=>s.includes('avram'),s=>s.includes('humane')||s.includes('humanities'),
+ s=>s.includes('hendrix'),s=>s.includes('douglass'),s=>s.includes('devries'),s=>s.includes('stimson'),
+ s=>s.includes('life sciences building'),s=>s.includes('shore club'),s=>s==='the loft',
+ s=>s.includes('southampton student center'),s=>s.includes("chancellor's hall")&&s.includes('southampton'),
+ s=>s.includes('port jefferson'),s=>s.includes('rinx')||s.includes('660 terry'),s=>s.includes('anaheim')
+];
+const OFF_CAMPUS_PINS = new Set(['avram','southampton_student_center','southampton_chancellors','portjeff','rinx','anaheim']);
+function foodLocationText(location){
+ return String(location||'').toLowerCase().replace(/[\u2018\u2019]/g,"'").replace(/\s+/g,' ').trim()
+  .replace(/(?:,\s*(?:united states(?: of america)?|u\.?s\.?a?\.?|america))+(?:\s*[.,])?\s*$/i,'').trim();
+}
+function foodEventPin(event){
+ const s=foodLocationText(event.location);
+ if(event.location_visibility==='withheld_by_source'||event.is_online===true||event.online===true||!s||/withheld|register to receive location details|\b(?:online|virtual|zoom|webex|discord)\b|google meet|microsoft teams|https?:\/\//i.test(s)||/^(?:united states(?: of america)?|u\.?s\.?a?\.?|student center|stony brook university(?:,? stony brook medicine)?)$/.test(s))return null;
+ const index=BUILDING_MATCHERS.findIndex(match=>match(s)),building=index<0?null:BUILDING_PINS[index];
+ const pairs=/(?:^|[^\d.])([+-]?\d{1,2}(?:\.\d+)?)\s*,\s*([+-]?\d{1,3}(?:\.\d+)?)(?=$|[^\d.])/g;
+ let pair;
+ while((pair=pairs.exec(s))){
+  const lat=Number(pair[1]),lon=Number(pair[2]);
+  if(Math.abs(lat)<=90&&Math.abs(lon)<=180){
+   const campus=BUILDING_PINS.filter(p=>!OFF_CAMPUS_PINS.has(p.key));
+   const main=(!building||!OFF_CAMPUS_PINS.has(building.key))&&lat>=Math.min(...campus.map(p=>p.lat))&&lat<=Math.max(...campus.map(p=>p.lat))&&lon>=Math.min(...campus.map(p=>p.lon))&&lon<=Math.max(...campus.map(p=>p.lon));
+   return {key:building?.key||'source-coordinate',name:building?.name||String(event.location).trim(),lat,lon,main};
+  }
+ }
+ return building?{...building,main:!OFF_CAMPUS_PINS.has(building.key)}:null;
+}
+function foodPinGroups(events){
+ const groups=new Map();
+ for(const event of events){
+  const pin=foodEventPin(event);if(!pin)continue;
+  // Co-located named spaces share a marker, so no building's events are obscured.
+  const key=pin.lat+','+pin.lon;
+  if(!groups.has(key))groups.set(key,{lat:pin.lat,lon:pin.lon,main:pin.main,names:new Set(),events:[]});
+  const group=groups.get(key);group.names.add(pin.name);group.events.push(event);group.main=group.main&&pin.main;
+ }
+ return [...groups.values()];
+}
+let foodLeafletPromise;
+function foodLoadLeaflet(){
+ if(!foodLeafletPromise)foodLeafletPromise=new Promise((resolve,reject)=>{
+  const css=document.createElement('link'),script=document.createElement('script');let styled=false,loaded=false;
+  const timer=setTimeout(()=>finish(new Error('Map library unavailable')),12000);
+  const finish=error=>{if(error){clearTimeout(timer);reject(error)}else if(styled&&loaded){clearTimeout(timer);window.L?resolve(window.L):reject(new Error('Map library unavailable'))}};
+  css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';css.integrity='sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';css.crossOrigin='';
+  script.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';script.integrity='sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';script.crossOrigin='';script.async=true;
+  css.onload=()=>{styled=true;finish()};script.onload=()=>{loaded=true;finish()};css.onerror=script.onerror=()=>finish(new Error('Map library unavailable'));
+  document.head.append(css,script);
+ });
+ return foodLeafletPromise;
+}
+function foodEventMap(parent,formatDate){
+ if(!D.production_mode||!D.sbengaged)return {update(){}};
+ const section=panel('Public event map','Pins follow the current filters. Select a building to see its events.','full public-event-map','event-map');
+ section.style.display='none';parent.append(section);
+ const canvas=el('div');canvas.style.height='360px';canvas.style.width='100%';canvas.style.maxHeight='65vh';canvas.style.minHeight='260px';canvas.setAttribute('aria-label','Map of public event buildings');canvas.setAttribute('role','region');section.append(canvas);
+ let map,markers,latest=[],failed=false;
+ function paint(L){
+  const groups=foodPinGroups(latest);markers.clearLayers();
+  for(const group of groups){
+   const name=[...group.names].join(' / '),content=el('div');content.append(el('strong','',name));const list=el('ul');
+   for(const event of group.events){const item=el('li'),title=el('span','',event.title);let url;try{url=new URL(event.url)}catch{}
+    if(url&&['https:','http:'].includes(url.protocol)){const link=el('a','',event.title);link.href=url.href;link.target='_blank';link.rel='noopener';item.append(link)}else item.append(title);
+    item.append(el('div','',formatDate(event.starts_at)+(event.ends_at?' – '+formatDate(event.ends_at):'')));list.append(item);
+   }
+   content.append(list);L.marker([group.lat,group.lon],{title:name+' · '+group.events.length+' events',alt:name,keyboard:true}).bindPopup(content,{maxWidth:320}).addTo(markers);
+  }
+  const main=groups.filter(p=>p.main),points=(main.length?main:BUILDING_PINS.filter(p=>!OFF_CAMPUS_PINS.has(p.key))).map(p=>[p.lat,p.lon]);
+  map.fitBounds(points,{padding:[28,28],maxZoom:16,animate:false});
+ }
+ foodLoadLeaflet().then(L=>{
+  try{section.style.display='';map=L.map(canvas,{scrollWheelZoom:false});L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);markers=L.layerGroup().addTo(map);map.invalidateSize();paint(L)}catch{failed=true;if(map)map.remove();section.remove()}
+ }).catch(()=>{failed=true;section.remove()});
+ return {update(events){latest=events;if(map&&!failed)try{paint(window.L)}catch{failed=true;map.remove();section.remove()}}};
+}
+
 const builders={'neural-cppi':neural,FlowForge:flow,toxicflow:toxic,'efficient-frontier-fc':fc,sukuklab:sukuk,formulaforge:formula,'grind-bandit':grind,studyforge:study,deeparcade:arcade,wattwise:watt,'freefood-radar':food};
 
 window.dashboardValidation={repo:D.repo,complete:false,errors:[]};
@@ -189,7 +527,7 @@ function food(){
 
  if(age>30)note('This feed data is over 30 hours old. Events may have changed. Follow the official event link before attending.',intro);
 
- const g=grid(),p=panel('Find a worthwhile stop','Sorted by the existing classifier’s probability × food-quality score. This is a ranking heuristic, not measured meal value.','full public-events','events');g.append(p);
+ const g=grid(),eventMap=foodEventMap(g,dt),p=panel('Find a worthwhile stop','Sorted by the existing classifier’s probability × food-quality score. This is a ranking heuristic, not measured meal value.','full public-events','events');g.append(p);
 
  const controls=el('div','controls'),search=el('input');search.type='search';search.placeholder='Title, organizer, location or food';search.setAttribute('aria-label','Search public events');const lab=el('label','','Search public events');lab.append(search);controls.append(lab);
 
@@ -212,6 +550,8 @@ function food(){
   if(when.value==='1')rows=rows.filter(e=>new Date(e.starts_at).toLocaleDateString('en-CA',{timeZone:'America/New_York'})===today);if(when.value==='2')rows=rows.filter(e=>new Date(e.starts_at).getTime()<Date.now()+3*86400000);
 
   rows.sort((a,b)=>sort.value==='1'?new Date(a.starts_at)-new Date(b.starts_at):(b.score??-1)-(a.score??-1)||new Date(a.starts_at)-new Date(b.starts_at));
+
+  eventMap.update(rows);
 
   const pages=Math.max(1,Math.ceil(rows.length/size));page=Math.min(page,pages-1);list.replaceChildren();count.textContent=rows.length+' matching public events · '+active().filter(e=>e.location_visibility==='withheld_by_source').length+' locations withheld by publisher in the current window';
 
