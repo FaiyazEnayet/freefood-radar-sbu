@@ -477,7 +477,7 @@ function foodEventMap(parent,formatDate){
     if(url&&['https:','http:'].includes(url.protocol)){const link=el('a','',event.title);link.href=url.href;link.target='_blank';link.rel='noopener';item.append(link)}else item.append(title);
     item.append(el('div','',formatDate(event.starts_at)+(event.ends_at?' – '+formatDate(event.ends_at):'')));list.append(item);
    }
-   content.append(list);L.marker([group.lat,group.lon],{title:name+' · '+group.events.length+' events',alt:name,keyboard:true}).bindPopup(content,{maxWidth:320}).addTo(markers);
+   content.append(list);L.marker([group.lat,group.lon],{title:name+' · '+group.events.length+' events',alt:name,keyboard:true}).bindPopup(content,{maxWidth:Math.max(160,Math.min(320,canvas.clientWidth-56)),maxHeight:240}).addTo(markers);
   }
   const main=groups.filter(p=>p.main),points=(main.length?main:BUILDING_PINS.filter(p=>!OFF_CAMPUS_PINS.has(p.key))).map(p=>[p.lat,p.lon]);
   map.fitBounds(points,{padding:[28,28],maxZoom:16,animate:false});
