@@ -28,6 +28,7 @@ An event’s predicted food relevance and the reliability of its listing are sep
 - Search official public events, inspect source descriptions and open organizer event links.
 - Filter model food candidates, all public events or locally saved events, with date filters and pagination.
 - Inspect source freshness, withheld locations and historical model evaluation without confusing them with live-feed accuracy.
+- See verified building locations on a map: one pin per building, with that building's events in the popup. Only buildings on a verified list get pins; events with withheld, online, or unmatched locations stay in the list without a pin.
 
 ## Method
 
