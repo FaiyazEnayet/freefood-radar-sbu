@@ -1,10 +1,10 @@
 {
-  "last_attempt_at": "2026-10-24T23:07:20.869123+00:00",
+  "last_attempt_at": "2026-10-25T14:57:22.351665+00:00",
   "success": true,
-  "last_successful_fetch_at": "2026-10-24T23:07:20.869123+00:00",
-  "count_change": "stable",
+  "last_successful_fetch_at": "2026-10-25T14:57:22.351665+00:00",
+  "count_change": "shrank",
   "previous_selected_events": 1005,
-  "selected_events": 1005,
+  "selected_events": 996,
   "pending_count_change": null,
   "error": null
 }
