@@ -32,25 +32,49 @@ configured to serve docs/ may publish the new HTML through its existing settings
 - Uses UTC/TZID timestamps and displays America/New_York. All-day events retain
   their date semantics. Floating times, if received, are flagged as assumed NY.
 - Deduplicates by source UID, retaining the newest modification/sequence. A
-  cancelled newest record removes its older occurrence.
+  cancelled newest record removes its older occurrence. The frozen
+  precedence rule is: SEQUENCE first (it is the revision counter),
+  LAST-MODIFIED second, and the first occurrence wins an exact tie, so a
+  later exact duplicate cannot override an earlier record. Event identity
+  is the source UID alone: a changed UID is a distinct listing, and it
+  cannot resurrect a cancelled listing under the old UID.
 - Public locations are retained. “Sign in to download the location” becomes an
   explicit withheld-location state. No coordinates or rooms are inferred.
 - Enforces calendar content type, supported redirect hosts, response size and
   timeouts. Robots policy must be retrievable and permit the feed.
-- The current feed expands recurring occurrences. If an RRULE/RECURRENCE-ID
-  schema appears, refresh fails visibly rather than silently losing recurrences.
+- The current feed expands recurring occurrences. If an RRULE, RECURRENCE-ID,
+  RDATE or EXDATE property appears, refresh fails visibly rather than
+  silently losing or inventing occurrences.
+- End semantics follow RFC 5545. A date DTEND is an exclusive end and must
+  be strictly later than the DTSTART date; a date DTSTART with no DTEND or
+  DURATION lasts one day. A valid DURATION sets the end as elapsed time
+  (added in UTC, so a daylight saving transition neither stretches nor
+  shrinks it); an invalid DURATION, or DTEND together with DURATION, makes
+  that event an invalid record, and a malformed-event share above the
+  threshold fails the refresh loudly. A timed event with neither DTEND nor
+  DURATION gets no invented duration: it is selected on its start only and
+  carries `duration_unknown: true`.
+- Parse diagnostics count every newest UID in exactly one reject stage
+  (selected, cancelled, out of window, invalid), so those four counts always
+  sum to the unique UID count. The total invalid count additionally covers
+  components without a UID and components whose revision cannot be ordered.
 - A failed fetch, parse or scoring step preserves the last successful snapshot
   and writes a failed status. Demonstration events never replace public data.
 - Every refresh classifies the selected-event count against the last good
   snapshot (`initial`, `stable`, `grew`, `shrank`, `verified_empty`,
-  `empty_suspect`, `severe_shrink_suspect`, plus `_confirmed` variants) and
-  records the state and both counts in the status file and the snapshot
-  diagnostics. A feed whose components are all cancelled, expired or outside
-  the window is a verified zero and may replace the snapshot. A feed with no
-  components at all, or a drop below half of a snapshot that had at least 20
-  events, is treated as a suspected source failure: the refresh fails, the
-  last good snapshot is kept, and the new result is accepted only when a
-  second, identical observation (same count, same source hash) confirms it.
+  `empty_suspect`, `severe_shrink_suspect`, `zero_unverified_suspect`, plus
+  `_confirmed` variants) and records the state and both counts in the status
+  file and the snapshot diagnostics. A feed whose components are all
+  cancelled, expired or outside the window is a verified zero and may
+  replace the snapshot. A zero selected count that includes any invalid or
+  ambiguous record is never a verified zero: it is
+  `zero_unverified_suspect` first, and a second identical observation
+  records it as `zero_unverified_confirmed`, still not as verified. A feed
+  with no components at all, or a drop below half of a snapshot that had at
+  least 20 events, is treated as a suspected source failure: the refresh
+  fails, the last good snapshot is kept, and the new result is accepted
+  only when a second, identical observation (same count, same source hash)
+  confirms it.
 - Records source URL, fetch time, source-body hash, window, row diagnostics,
   training-data hash, model recipe, seed and inference library version.
 
