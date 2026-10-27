@@ -64,20 +64,34 @@ def _count_change(previous_count, diagnostics) -> tuple[str, bool]:
     """Classify a parsed feed against the last good snapshot.
 
     Returns (state, suspect). A suspect state (empty_suspect,
-    severe_shrink_suspect) must not replace the snapshot until a second,
-    identical observation confirms it.
+    severe_shrink_suspect, zero_unverified_suspect) must not replace the
+    snapshot until a second, identical observation confirms it.
     """
     new = diagnostics["selected_events"]
     if previous_count is None:
         return "initial", False
     if new == 0:
-        # Zero selected events from a feed that still carries components
-        # (all cancelled, expired or outside the window) is a verified
-        # zero. A feed with no components at all breaks the contract the
-        # published feed has always satisfied, so it is only a suspicion.
+        # Zero selected events is a verified zero ONLY when every newest
+        # UID is demonstrably cancelled or out of window and no record was
+        # rejected. A zero that includes an invalid or ambiguous component
+        # could be hiding an upcoming event, so it is never verified_empty:
+        # it is zero_unverified_suspect until a second identical observation
+        # confirms it, and even then it is recorded as confirmed-unverified,
+        # not as a verified zero. A feed with no components at all breaks
+        # the contract the published feed has always satisfied, so it is
+        # only a suspicion. Diagnostics missing the proof fields fail closed
+        # to the unverified state.
         if diagnostics["source_components"] == 0:
             return "empty_suspect", True
-        return "verified_empty", False
+        invalid = diagnostics.get("invalid_records")
+        unique = diagnostics.get("unique_uids")
+        cancelled = diagnostics.get("cancelled")
+        out_of_window = diagnostics.get("out_of_window")
+        if (invalid == 0 and unique is not None and unique > 0
+                and cancelled is not None and out_of_window is not None
+                and cancelled + out_of_window == unique):
+            return "verified_empty", False
+        return "zero_unverified_suspect", True
     if previous_count >= SHRINK_MIN_PREVIOUS and new < previous_count * SHRINK_RATIO:
         return "severe_shrink_suspect", True
     if new < previous_count:

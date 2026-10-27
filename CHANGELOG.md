@@ -6,6 +6,31 @@
 - Centered the README header: uniform dark badge labels and three action buttons in the dashboard palette (Open Dashboard, Explore Method, Run Locally).
 
 ### Fixed
+- P2: standards-aware ICS validation and a zero-selection proof for the SB
+  Engaged calendar feed (`src/radar/scrapers/sbengaged.py`,
+  `src/radar/live.py`, documented in `SBENGAGED-INTEGRATION.md`):
+  - A date DTEND is treated as an exclusive end and must be strictly later
+    than the DTSTART date; a date event with no DTEND or DURATION lasts one
+    day. A valid DURATION sets the end as elapsed time (added in UTC, so a
+    daylight saving transition does not stretch or shrink it); an invalid
+    DURATION, or DTEND together with DURATION, is an invalid record. A timed
+    event with neither gets no invented duration and carries
+    `duration_unknown: true`.
+  - RRULE, RECURRENCE-ID, RDATE and EXDATE now all fail the refresh
+    visibly instead of silently dropping or inventing occurrences.
+  - UID precedence is frozen: SEQUENCE first, LAST-MODIFIED second, first
+    occurrence wins an exact tie. A changed UID is a distinct listing and
+    cannot resurrect a cancelled listing under the old UID.
+  - Parse diagnostics count every newest UID in exactly one stage
+    (selected, cancelled, out of window, invalid), and a zero selected
+    count is `verified_empty` only when every UID is cancelled or out of
+    window with no invalid records; otherwise it is
+    `zero_unverified_suspect` (then `zero_unverified_confirmed` on a second
+    identical observation), never a verified zero.
+  - New regression test `test_stage3_freefood_radar_2` (26 cases) pins the
+    acceptance fixtures, including the DST fall-back, floating-time,
+    malformed-percentage and FR1-compatible verified-zero cases. Full suite:
+    74 tests passing.
 - P1: the production dashboard can no longer carry seeded demonstration data.
   `portfolio_ui/renderer.py` now splits production render mode from the
   explicit offline demo mode at the generator/data-contract level:

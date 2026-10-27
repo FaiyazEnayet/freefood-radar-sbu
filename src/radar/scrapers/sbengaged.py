@@ -66,24 +66,42 @@ def parse_calendar(raw: bytes, now: datetime, days: int = 14) -> tuple[list[dict
     if len(components) > 50000:
         raise FeedError("Unexpected event volume; inspect source contract")
     newest = {}
-    rejected = 0
+    no_uid = 0
+    unorderable = 0
     for item in components:
-        if item.get("RRULE") or item.get("RECURRENCE-ID"):
+        # Recurrence-set properties are not expanded by this parser. Any of
+        # them means the occurrence set is unknown, so the feed fails closed
+        # instead of silently dropping or inventing occurrences.
+        if (item.get("RRULE") or item.get("RECURRENCE-ID")
+                or item.get("RDATE") or item.get("EXDATE")):
             raise FeedError("Recurring-event schema changed; occurrence expansion needs review")
         uid = str(item.get("UID", "")).strip()
         if not uid:
-            rejected += 1
+            no_uid += 1
+            continue
+        try:
+            sequence = int(item.get("SEQUENCE", 0))
+        except (ValueError, TypeError):
+            # A revision that cannot be ordered cannot win or lose against
+            # another variant; it is dropped and counted, never guessed.
+            unorderable += 1
             continue
         modified = item.decoded("LAST-MODIFIED", datetime.min.replace(tzinfo=timezone.utc))
         if not isinstance(modified, datetime):
             modified = datetime.min.replace(tzinfo=timezone.utc)
         modified = modified.replace(tzinfo=timezone.utc) if modified.tzinfo is None else modified
-        key = (modified, int(item.get("SEQUENCE", 0)))
-        if uid not in newest or key >= newest[uid][0]:
+        # Frozen precedence (P2): SEQUENCE is the revision counter and wins
+        # over LAST-MODIFIED; an exact tie keeps the first occurrence, so a
+        # later exact duplicate (a retransmission, not a revision) cannot
+        # override it.
+        key = (sequence, modified)
+        if uid not in newest or key > newest[uid][0]:
             newest[uid] = (key, item)
     events = []
     cancelled = 0
     out_of_window = 0
+    invalid_uid = 0
+    unknown_duration = 0
     until = now + timedelta(days=days)
     for uid, (_, item) in newest.items():
         if str(item.get("STATUS", "")).upper() == "CANCELLED":
@@ -91,21 +109,52 @@ def parse_calendar(raw: bytes, now: datetime, days: int = 14) -> tuple[list[dict
             continue
         try:
             start, all_day, floating = _date(item.decoded("DTSTART"))
-            end_value = item.decoded("DTEND", None)
-            end = _date(end_value)[0] if end_value is not None else (start + timedelta(days=1) if all_day else None)
+            has_dtend = item.get("DTEND") is not None
+            has_duration = item.get("DURATION") is not None
+            if has_dtend and has_duration:
+                raise ValueError("DTEND and DURATION must not both be present")
+            if has_dtend:
+                end_value = item.decoded("DTEND", None)
+                end = _date(end_value)[0]
+                if all_day and isinstance(end_value, date) and not isinstance(end_value, datetime):
+                    # A date DTEND is an exclusive end: it must be strictly
+                    # later than the DTSTART date, not equal to it.
+                    if end <= start:
+                        raise ValueError("date DTEND is not later than DTSTART")
+                duration_unknown = False
+            elif has_duration:
+                duration = item.decoded("DURATION", None)
+                if not isinstance(duration, timedelta):
+                    raise ValueError("unsupported DURATION")
+                # DURATION is elapsed time: add it in UTC so a DST transition
+                # does not stretch or shrink it in wall-clock terms.
+                end = (start.astimezone(timezone.utc) + duration).astimezone(start.tzinfo)
+                duration_unknown = False
+            elif all_day:
+                # RFC 5545 default for a date DTSTART with no DTEND/DURATION.
+                end = start + timedelta(days=1)
+                duration_unknown = False
+            else:
+                # Timed event with no end information: no duration is
+                # invented. The event is selected only on its start, and the
+                # unknown duration is disclosed on the event record.
+                end = None
+                duration_unknown = True
             if end is not None and end < start:
                 raise ValueError("negative duration")
             if start >= until or (end or start) <= now:
                 out_of_window += 1
                 continue
         except (ValueError, TypeError, KeyError):
-            rejected += 1
+            invalid_uid += 1
             continue
         title = _plain(item.get("SUMMARY"))
         url = _public_url(str(item.get("URL", "")))
         if not title or not url:
-            rejected += 1
+            invalid_uid += 1
             continue
+        if duration_unknown:
+            unknown_duration += 1
         location = _plain(item.get("LOCATION"))
         withheld = "sign in" in location.lower() or "log in" in location.lower()
         organizer = item.get("ORGANIZER")
@@ -118,14 +167,26 @@ def parse_calendar(raw: bytes, now: datetime, days: int = 14) -> tuple[list[dict
             location_visibility="withheld_by_source" if withheld else ("public" if location else "not_listed"),
             starts_at=start.isoformat(), ends_at=end.isoformat() if end else None,
             all_day=all_day, timezone="America/New_York", floating_time_assumed=floating,
+            duration_unknown=duration_unknown,
             url=url, source="sbengaged", source_updated_at=updated.isoformat() if isinstance(updated, datetime) else None,
             food_probability=None, score=None, food_keywords=[], food_verified=False,
         ))
-    if rejected and rejected > max(3, len(components) * .05):
-        raise FeedError(f"Too many invalid events ({rejected}); keeping the last good snapshot")
+    # Reject-stage accounting (P2). Every newest UID lands in exactly one
+    # stage, so selected + cancelled + out_of_window + invalid_uid is
+    # always equal to unique_uids. invalid_records is the total of all
+    # unusable components, including ones without a UID and ones whose
+    # revision could not be ordered. unsupported_recurrence is 0 on any
+    # successful parse: a recurrence-set property is a contract error
+    # raised above, never a silently counted stage.
+    invalid_records = invalid_uid + no_uid + unorderable
+    if invalid_records and invalid_records > max(3, len(components) * .05):
+        raise FeedError(f"Too many invalid events ({invalid_records}); keeping the last good snapshot")
     return sorted(events, key=lambda x: (datetime.fromisoformat(x["starts_at"]).timestamp(), x["id"])), dict(
         source_components=len(components), unique_uids=len(newest), cancelled=cancelled,
-        invalid_records=rejected, out_of_window=out_of_window, selected_events=len(events),
+        invalid_records=invalid_records, invalid_uid_records=invalid_uid,
+        no_uid_records=no_uid, unorderable_records=unorderable,
+        unsupported_recurrence=0, unknown_duration_events=unknown_duration,
+        out_of_window=out_of_window, selected_events=len(events),
         source_sha256=sha256(raw).hexdigest(),
         window_start=now.isoformat(), window_end=until.isoformat(),
     )
