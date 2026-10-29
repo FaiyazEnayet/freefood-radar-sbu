@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/readme-banner.svg?v=type-20261017b" alt="Freefood Radar SBU: Public campus events, ranked with food evidence" width="1200"></p>
+<p align="center"><img src="docs/readme-banner.svg?v=feed-20261029" alt="Freefood Radar SBU: Public campus events, ranked with food evidence" width="1200"></p>
 
 <h1 align="center">Freefood-Radar-SBU</h1>
 
@@ -74,7 +74,7 @@ flowchart LR
 
 The original labeled-text test is separate from the public feed. Its precision and recall describe that held-out sample, not verified campus food availability. Public-source events can still be cancelled, restricted or have locations withheld behind sign-in. The UI links back to the source rather than fabricating missing details.
 
-![Historical held-out text-classification results](docs/results.png?v=20261024)
+![Current public feed model rankings](docs/results.png?v=feed-20261029)
 
 An official listing establishes that the event was published, not that food is free or available when a student arrives. The model probability and food-quality weight are ranking aids. Source freshness and organizer details remain necessary for a useful decision.
 
