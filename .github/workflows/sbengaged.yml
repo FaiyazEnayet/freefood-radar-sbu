@@ -78,6 +78,12 @@ jobs:
           git add data/sbengaged-events.json data/sbengaged-status.json docs/dashboard.html
           if ! git diff --cached --quiet; then
             git commit -m 'Refresh public SB Engaged snapshot'
+            git fetch origin main
+                        if ! git rebase origin/main; then
+                                      git checkout --theirs -- data/sbengaged-events.json data/sbengaged-status.json docs/dashboard.html
+                                                    git add data/sbengaged-events.json data/sbengaged-status.json docs/dashboard.html
+                                                                  GIT_EDITOR=true git rebase --continue
+                                                                              fi
             git push
           fi
       - name: Surface a failed source refresh
