@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "freefood-radar"
-version = "0.1.0"
+version = "1.0.0"
 description = "Free-food finder for Stony Brook students: scrape campus event sources, score free-food mentions with NLP, publish a ranked daily digest."
 readme = "README.md"
 license = { text = "MIT" }
