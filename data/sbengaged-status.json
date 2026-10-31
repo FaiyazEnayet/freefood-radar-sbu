@@ -1,10 +1,25 @@
 {
-  "last_attempt_at": "2026-10-31T16:06:01.453305+00:00",
+  "last_attempt_at": "2026-10-31T18:15:38.177682+00:00",
   "success": true,
-  "last_successful_fetch_at": "2026-10-31T16:06:01.453305+00:00",
-  "count_change": "grew",
-  "previous_selected_events": 1054,
-  "selected_events": 1057,
+  "last_successful_fetch_at": "2026-10-31T18:15:38.177682+00:00",
+  "count_change": "shrank",
+  "previous_selected_events": 1057,
+  "selected_events": 1056,
   "pending_count_change": null,
+  "state": "fresh",
+  "not_modified": false,
+  "conditional_request": true,
+  "etag": "\"3819edb704eae34a92f6469e5a4ce2ac\"",
+  "last_modified": "Sat, 31 Oct 2026 18:02:52 GMT",
+  "attempts": 1,
+  "lineage": {
+    "schema_version": 1,
+    "source_url": "https://sbengaged.stonybrook.edu/ical/stonybrook/ical_stonybrook.ics",
+    "source_sha256": "010575e27ab287f691e108791239122640770fe70d28755864ec0ef716d51ca4",
+    "source_etag": "\"3819edb704eae34a92f6469e5a4ce2ac\"",
+    "source_last_modified": "Sat, 31 Oct 2026 18:02:52 GMT",
+    "model_sha256": "6f11374019b4a8bf50a1ab7c7e4f43770e2094f66bc73f61b4f666eb09e0599f"
+  },
+  "model_sha256": "6f11374019b4a8bf50a1ab7c7e4f43770e2094f66bc73f61b4f666eb09e0599f",
   "error": null
 }
