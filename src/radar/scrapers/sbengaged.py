@@ -11,6 +11,7 @@ from hashlib import sha256
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 from zoneinfo import ZoneInfo
+import time as _time
 
 import requests
 from bs4 import BeautifulSoup
@@ -192,10 +193,46 @@ def parse_calendar(raw: bytes, now: datetime, days: int = 14) -> tuple[list[dict
     )
 
 
-def fetch_calendar(session=None) -> tuple[bytes, dict]:
-    """One robots read and one bounded public-feed read with timeouts."""
+# HTTP statuses worth one more attempt. Anything else fails immediately:
+# a 404 or a contract failure (redirect, wrong content type, oversize body)
+# will not be fixed by asking again.
+TRANSIENT_STATUSES = {429, 500, 502, 503, 504}
+DEFAULT_MAX_ATTEMPTS = 3
+
+
+def conditional_headers(previous) -> dict:
+    """Conditional request headers for a previous fetch, if it recorded any.
+
+    `previous` is the source record of the last good snapshot (its etag and
+    last_modified fields). An empty or missing record means a plain fetch.
+    """
+    headers = {}
+    if isinstance(previous, dict):
+        if previous.get("etag"):
+            headers["If-None-Match"] = previous["etag"]
+        if previous.get("last_modified"):
+            headers["If-Modified-Since"] = previous["last_modified"]
+    return headers
+
+
+def fetch_calendar(session=None, previous=None, max_attempts=DEFAULT_MAX_ATTEMPTS,
+                   backoff_seconds=0.5) -> tuple[bytes | None, dict]:
+    """One robots read and one bounded, conditional public-feed read.
+
+    When `previous` carries an ETag or Last-Modified value, those are sent
+    back as If-None-Match / If-Modified-Since. A 304 response returns
+    (None, info) with not_modified True: the caller keeps its last good
+    snapshot untouched. Transient failures (429 and 5xx, or a transport
+    error) are retried up to max_attempts times with exponential backoff;
+    every other failure raises immediately. Retries refetch the whole feed,
+    so the parser still deduplicates by UID and no partial result is kept.
+    """
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least 1")
     session = session or requests.Session()
     headers = {"User-Agent": UA}
+    conditional = conditional_headers(previous)
+    headers.update(conditional)
     robots = session.get("https://sbengaged.stonybrook.edu/robots.txt", headers=headers, timeout=(10, 30))
     if robots.status_code != 200:
         raise FeedError("Could not verify public-source robots policy")
@@ -203,18 +240,54 @@ def fetch_calendar(session=None) -> tuple[bytes, dict]:
     policy.parse(robots.text.splitlines())
     if not policy.can_fetch(UA, FEED_URL):
         raise FeedError("Calendar fetching is disallowed by the public robots policy")
-    with session.get(FEED_URL, headers=headers, timeout=(10, 45), stream=True, allow_redirects=True) as response:
-        if response.status_code != 200:
-            raise FeedError(f"Calendar returned HTTP {response.status_code}")
-        chain = list(response.history) + [response]
-        if any(urlparse(r.url).scheme != "https" or urlparse(r.url).hostname not in ALLOWED_HOSTS for r in chain):
-            raise FeedError("Unexpected feed redirect; inspect publisher configuration")
-        if "text/calendar" not in response.headers.get("Content-Type", "").lower():
-            raise FeedError("Source returned a non-calendar page, possibly a login screen")
-        raw = bytearray()
-        for chunk in response.iter_content(65536):
-            raw.extend(chunk)
-            if len(raw) > MAX_BYTES:
-                raise FeedError("Calendar exceeds configured size limit")
-        return bytes(raw), dict(url=FEED_URL, final_url=response.url, etag=response.headers.get("ETag"),
-                                last_modified=response.headers.get("Last-Modified"))
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with session.get(FEED_URL, headers=headers, timeout=(10, 45), stream=True,
+                             allow_redirects=True) as response:
+                if response.status_code == 304:
+                    return None, dict(url=FEED_URL, final_url=response.url,
+                                      etag=response.headers.get("ETag") or previous_etag(previous),
+                                      last_modified=response.headers.get("Last-Modified")
+                                      or previous_last_modified(previous),
+                                      not_modified=True, conditional_request=bool(conditional),
+                                      attempts=attempt)
+                if response.status_code != 200:
+                    if response.status_code in TRANSIENT_STATUSES and attempt < max_attempts:
+                        _sleep_backoff(attempt, backoff_seconds)
+                        continue
+                    raise FeedError(f"Calendar returned HTTP {response.status_code}")
+                chain = list(response.history) + [response]
+                if any(urlparse(r.url).scheme != "https" or urlparse(r.url).hostname not in ALLOWED_HOSTS
+                       for r in chain):
+                    raise FeedError("Unexpected feed redirect; inspect publisher configuration")
+                if "text/calendar" not in response.headers.get("Content-Type", "").lower():
+                    raise FeedError("Source returned a non-calendar page, possibly a login screen")
+                raw = bytearray()
+                for chunk in response.iter_content(65536):
+                    raw.extend(chunk)
+                    if len(raw) > MAX_BYTES:
+                        raise FeedError("Calendar exceeds configured size limit")
+                return bytes(raw), dict(url=FEED_URL, final_url=response.url,
+                                        etag=response.headers.get("ETag"),
+                                        last_modified=response.headers.get("Last-Modified"),
+                                        not_modified=False, conditional_request=bool(conditional),
+                                        attempts=attempt)
+        except requests.exceptions.RequestException as exc:
+            if attempt < max_attempts:
+                _sleep_backoff(attempt, backoff_seconds)
+                continue
+            raise FeedError(f"Calendar fetch failed: {exc}") from exc
+    raise FeedError("Calendar fetch failed: retry limit reached")
+
+
+def previous_etag(previous):
+    return previous.get("etag") if isinstance(previous, dict) else None
+
+
+def previous_last_modified(previous):
+    return previous.get("last_modified") if isinstance(previous, dict) else None
+
+
+def _sleep_backoff(attempt, backoff_seconds):
+    if backoff_seconds and backoff_seconds > 0:
+        _time.sleep(backoff_seconds * 2 ** (attempt - 1))
