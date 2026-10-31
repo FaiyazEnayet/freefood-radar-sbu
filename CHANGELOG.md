@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Fixed
+- FR4: refreshes are now conditional, versioned and inspectable
+  (`src/radar/scrapers/sbengaged.py`, `src/radar/live.py`):
+  - `fetch_calendar` sends back the last good snapshot's ETag and
+    Last-Modified as If-None-Match and If-Modified-Since. A 304 response
+    returns no body and the refresh keeps the snapshot file byte for byte
+    while moving health forward (last attempt and last successful fetch,
+    state fresh, not_modified recorded).
+  - Transient fetch failures (429 and 5xx, or a transport error) are
+    retried up to 3 attempts with exponential backoff; other failures
+    raise immediately. Retries refetch the whole feed, so UIDs are still
+    deduplicated by the parser and no partial result is kept.
+  - The model recipe is frozen as `MODEL_CONFIG` in `src/radar/live.py`
+    with an immutable SHA-256 config hash. Every snapshot and status file
+    now carries one lineage record (schema version, source URL, source
+    SHA-256, source ETag and Last-Modified, model hash), and the status
+    file carries a state of fresh, stale or failed plus the model hash,
+    so a status view can mark stale and failure states and the model
+    hash without reading the snapshot. Atomic last-good behavior is
+    unchanged: a failed or suspect refresh never replaces the last good
+    snapshot.
+  - New regression test `test_stage3_freefood_radar_4` (11 cases) pins
+    the acceptance fixtures, including the 304 byte-identity case, the
+    bounded-retry case and the stale and failed state cases. Full suite:
+    85 tests passing.
+  - Note: no dashboard HTML or generator output was changed in this
+    item; the status and snapshot fields above are the data a status
+    view reads, and any dashboard marking that needs new HTML is a
+    dashboard-batch follow-up.
+
 ## [v1.0.0] - 2026-10-30
 
 ### Docs
