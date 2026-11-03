@@ -3,6 +3,28 @@
 ## Unreleased
 
 ### Fixed
+- P12: the SB Engaged fetch boundary now fails closed on the whole HTTP
+  chain (`src/radar/scrapers/sbengaged.py`):
+  - A slow or failed origin robots read (timeout, connection error) raises
+    a feed error instead of surfacing a raw transport error, and the
+    robots read itself must stay on approved HTTPS hosts.
+  - Every redirect hop must stay on an approved HTTPS host without
+    embedded credentials; a redirect loop is a contract failure and is no
+    longer retried as a transient error.
+  - The robots policy of the host a redirect lands on is enforced: a
+    same-host landing path is rechecked against the origin policy, and the
+    CampusGroups static host's own robots file is parsed and enforced when
+    it publishes one (an unavailable check fails the fetch; no published
+    file means no restrictions to enforce).
+  - Cookies set by any response during a fetch are dropped before the
+    fetch returns; only public metadata is recorded.
+  - New mock-only regression tests in `tests/test_sbengaged_http.py`
+    (`test_stage3_freefood_radar_12`, 30 cases) cover redirect statuses,
+    cross-host and credentialed redirect URLs, HTTPS downgrade, content
+    type rejection, oversized streams, robots failures, redirect loops
+    and cookie retention. Full suite: 115 tests passing.
+
+### Fixed
 - FR4: refreshes are now conditional, versioned and inspectable
   (`src/radar/scrapers/sbengaged.py`, `src/radar/live.py`):
   - `fetch_calendar` sends back the last good snapshot's ETag and
