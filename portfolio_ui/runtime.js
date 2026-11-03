@@ -500,7 +500,7 @@ let resizeTimer;window.addEventListener('resize',()=>{clearTimeout(resizeTimer);
 
 function food(){
 
- if(D.production_mode&&!D.sbengaged)return foodStatusOnly();
+ if(D.production_mode&&(!D.sbengaged||D.sbengaged_status?.state==='failed'))return foodStatusOnly();
  if(!D.sbengaged)return foodDemo();
 
  const sourceNotes=document.getElementById('sources');
@@ -514,16 +514,19 @@ function food(){
  const age=(now-new Date(S.fetched_at).getTime())/3600000;
 
  const opportunities=active().filter(e=>e.food_probability>=.5);
+ const refreshState=attempt.state||'unknown',modelHash=attempt.model_sha256||attempt.lineage?.model_sha256;
+ const refreshLabel={fresh:'CURRENT',stale:'STALE',failed:'FAILED'}[refreshState]||'UNKNOWN';
 
- metric([[String(active().length),'public event occurrences','not-ended · public feed'],[String(opportunities.length),'model food candidates','probability ≥ 50%'],[dt(S.fetched_at),'last successful fetch','America/New_York'],[age>30?'STALE':'FEED','freshness status','daily refresh']]);
+ metric([[String(active().length),'public event occurrences','not-ended · public feed'],[String(opportunities.length),'model food candidates','probability ≥ 50%'],[dt(S.fetched_at),'last successful fetch','America/New_York'],[refreshLabel,'refresh state',refreshState==='stale'?'last good data retained after a failed attempt':'daily refresh']]);
 
  const intro=panel('From SB Engaged, with the evidence attached','Public-source event facts and model food predictions are separate. Food availability, eligibility and room access must be checked with the organizer.','full live-intro','map');root.append(intro);
 
+ if(modelHash)note('Model · '+modelHash.slice(0,12),intro);
  const sourceLink=el('a','','Open the official SB Engaged calendar ↗');sourceLink.href=S.source.listing_url;sourceLink.target='_blank';sourceLink.rel='noopener';intro.append(sourceLink);
 
  note('Locations that require sign-in remain withheld. All event times below use America/New_York.',intro);
 
- if(attempt.success===false)note('Latest refresh failed. Showing the last successful public feed fetch from '+dt(S.fetched_at)+'. '+(attempt.error||'See refresh status.'),intro);
+ if(refreshState==='stale'||attempt.success===false)note('Latest refresh failed. Showing the last successful public feed fetch from '+dt(S.fetched_at)+'. '+(attempt.error||'See refresh status.'),intro);
 
  if(age>30)note('This feed data is over 30 hours old. Events may have changed. Follow the official event link before attending.',intro);
 
@@ -590,8 +593,11 @@ function food(){
 
 function foodStatusOnly(){
  const g=grid(),attempt=D.sbengaged_status||{};
+ const modelHash=attempt.model_sha256||attempt.lineage?.model_sha256;
  const p=panel('No events from the public feed yet','The public SB Engaged feed has not delivered any events so far, so nothing is listed here. No demonstration events are substituted.','full live-intro','map');
  g.append(p);
+ note('Refresh state: '+(attempt.state||'failed')+' · no public feed data',p);
+ if(modelHash)note('Model · '+modelHash.slice(0,12),p);
  if(attempt.error)note('Last refresh failed: '+attempt.error,p);
  if(attempt.last_attempt_at)note('Last attempt: '+attempt.last_attempt_at,p);
  // The legacy shell has demo disclosures when no snapshot is present.
