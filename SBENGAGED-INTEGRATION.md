@@ -31,13 +31,25 @@ configured to serve docs/ may publish the new HTML through its existing settings
 - Includes not-ended public occurrences starting before a rolling 14-day cutoff.
 - Uses UTC/TZID timestamps and displays America/New_York. All-day events retain
   their date semantics. Floating times, if received, are flagged as assumed NY.
-- Deduplicates by source UID, retaining the newest modification/sequence. A
-  cancelled newest record removes its older occurrence. The frozen
-  precedence rule is: SEQUENCE first (it is the revision counter),
-  LAST-MODIFIED second, and the first occurrence wins an exact tie, so a
-  later exact duplicate cannot override an earlier record. Event identity
-  is the source UID alone: a changed UID is a distinct listing, and it
-  cannot resurrect a cancelled listing under the old UID.
+- Deduplicates by source UID, retaining the newest revision. A
+  cancelled newest record removes its older occurrence. The precedence
+  rule follows iTIP message sequencing (RFC 5546 section 2.1.5): within
+  one identity, the highest SEQUENCE obsoletes every lower revision,
+  because SEQUENCE is the revision counter (RFC 5545 section 3.8.7.4),
+  incremented on every significant change, cancellations included
+  (RFC 5546 section 2.1.4); so a cancellation with a higher SEQUENCE
+  wins even when its LAST-MODIFIED is older than the active record's.
+  LAST-MODIFIED is the secondary key and the first occurrence wins an
+  exact tie, so a later exact duplicate cannot override an earlier
+  record. (iTIP names DTSTAMP as its own final tie-break; the
+  publisher stamps DTSTAMP at feed export time rather than per
+  revision, so this parser keeps LAST-MODIFIED as its secondary key.)
+  Event identity is the source UID: a changed UID is a distinct listing,
+  and it cannot resurrect a cancelled listing under the old UID. A
+  component carrying RECURRENCE-ID forms a distinct instance identity
+  (UID plus RECURRENCE-ID, RFC 5546 section 2.1.5 rule 1) and is never
+  merged with its master record during deduplication; the failure that
+  a recurrence-set property triggers names that instance.
 - Public locations are retained. “Sign in to download the location” becomes an
   explicit withheld-location state. No coordinates or rooms are inferred.
 - Enforces calendar content type, response size and timeouts. Every hop of
