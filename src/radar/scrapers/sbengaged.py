@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 from icalendar import Calendar
 
 FEED_URL = "https://sbengaged.stonybrook.edu/ical/stonybrook/ical_stonybrook.ics"
+ROBOTS_URL = "https://sbengaged.stonybrook.edu/robots.txt"
 LISTING_URL = "https://sbengaged.stonybrook.edu/events"
 NY = ZoneInfo("America/New_York")
 UA = "freefood-radar-sbu/0.2 (+https://github.com/FaiyazEnayet/freefood-radar-sbu)"
@@ -215,6 +216,47 @@ def conditional_headers(previous) -> dict:
     return headers
 
 
+def _public_hop(response) -> bool:
+    """One HTTP hop stays inside the public boundary: HTTPS, an approved
+    host, and no embedded credentials in the URL."""
+    parsed = urlparse(response.url)
+    return (parsed.scheme == "https" and parsed.hostname in ALLOWED_HOSTS
+            and not parsed.username and not parsed.password)
+
+
+def _enforce_landing_policy(session, headers, origin_policy, response) -> None:
+    """Robots policy for the URL the redirect chain actually lands on.
+
+    A same-host redirect is rechecked against the origin policy, since the
+    announced feed path being allowed says nothing about the landing path.
+    A landing on the other approved host is checked against that host's own
+    robots file when it publishes one: a 200 is parsed and enforced, a 5xx
+    or a transport failure means the policy could not be verified and the
+    fetch fails closed, and any other status (the static host answers 403
+    for its missing robots key) means no policy is published, which under
+    the robots access rules carries no restrictions to enforce.
+    """
+    final_url = response.url
+    if urlparse(final_url).hostname == urlparse(FEED_URL).hostname:
+        if final_url != FEED_URL and not origin_policy.can_fetch(UA, final_url):
+            raise FeedError("Calendar fetching is disallowed by the public robots policy")
+        return
+    robots_url = f"https://{urlparse(final_url).hostname}/robots.txt"
+    try:
+        landed = session.get(robots_url, headers=headers, timeout=(10, 30))
+    except requests.exceptions.RequestException as exc:
+        raise FeedError("Could not verify redirect-host robots policy") from exc
+    if any(not _public_hop(r) for r in list(landed.history) + [landed]):
+        raise FeedError("Could not verify redirect-host robots policy")
+    if landed.status_code >= 500:
+        raise FeedError("Could not verify redirect-host robots policy")
+    if landed.status_code == 200:
+        landed_policy = RobotFileParser()
+        landed_policy.parse(landed.text.splitlines())
+        if not landed_policy.can_fetch(UA, final_url):
+            raise FeedError("Calendar fetching is disallowed by the redirect host's robots policy")
+
+
 def fetch_calendar(session=None, previous=None, max_attempts=DEFAULT_MAX_ATTEMPTS,
                    backoff_seconds=0.5) -> tuple[bytes | None, dict]:
     """One robots read and one bounded, conditional public-feed read.
@@ -226,15 +268,40 @@ def fetch_calendar(session=None, previous=None, max_attempts=DEFAULT_MAX_ATTEMPT
     error) are retried up to max_attempts times with exponential backoff;
     every other failure raises immediately. Retries refetch the whole feed,
     so the parser still deduplicates by UID and no partial result is kept.
+
+    The fetch boundary is fail closed. Every hop of a redirect chain must
+    stay on an approved HTTPS host without embedded credentials, the origin
+    robots policy must be retrievable and permit the feed, a redirect loop
+    is a contract failure rather than a transient error, and the robots
+    policy of the host the chain lands on is enforced as described in
+    _enforce_landing_policy. Cookies set by any response during the fetch
+    are dropped before returning: only public metadata is recorded.
     """
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least 1")
     session = session or requests.Session()
+    try:
+        return _fetch_calendar(session, previous, max_attempts, backoff_seconds)
+    finally:
+        jar = getattr(session, "cookies", None)
+        if jar is not None:
+            jar.clear()
+
+
+def _fetch_calendar(session, previous, max_attempts, backoff_seconds
+                    ) -> tuple[bytes | None, dict]:
     headers = {"User-Agent": UA}
     conditional = conditional_headers(previous)
     headers.update(conditional)
-    robots = session.get("https://sbengaged.stonybrook.edu/robots.txt", headers=headers, timeout=(10, 30))
+    try:
+        robots = session.get(ROBOTS_URL, headers=headers, timeout=(10, 30))
+    except requests.exceptions.RequestException as exc:
+        # A slow or failed robots read means the public policy could not be
+        # verified; that fails closed like any other contract failure.
+        raise FeedError("Could not verify public-source robots policy") from exc
     if robots.status_code != 200:
+        raise FeedError("Could not verify public-source robots policy")
+    if any(not _public_hop(r) for r in list(robots.history) + [robots]):
         raise FeedError("Could not verify public-source robots policy")
     policy = RobotFileParser()
     policy.parse(robots.text.splitlines())
@@ -244,6 +311,9 @@ def fetch_calendar(session=None, previous=None, max_attempts=DEFAULT_MAX_ATTEMPT
         try:
             with session.get(FEED_URL, headers=headers, timeout=(10, 45), stream=True,
                              allow_redirects=True) as response:
+                chain = list(response.history) + [response]
+                if any(not _public_hop(r) for r in chain):
+                    raise FeedError("Unexpected feed redirect; inspect publisher configuration")
                 if response.status_code == 304:
                     return None, dict(url=FEED_URL, final_url=response.url,
                                       etag=response.headers.get("ETag") or previous_etag(previous),
@@ -256,10 +326,7 @@ def fetch_calendar(session=None, previous=None, max_attempts=DEFAULT_MAX_ATTEMPT
                         _sleep_backoff(attempt, backoff_seconds)
                         continue
                     raise FeedError(f"Calendar returned HTTP {response.status_code}")
-                chain = list(response.history) + [response]
-                if any(urlparse(r.url).scheme != "https" or urlparse(r.url).hostname not in ALLOWED_HOSTS
-                       for r in chain):
-                    raise FeedError("Unexpected feed redirect; inspect publisher configuration")
+                _enforce_landing_policy(session, headers, policy, response)
                 if "text/calendar" not in response.headers.get("Content-Type", "").lower():
                     raise FeedError("Source returned a non-calendar page, possibly a login screen")
                 raw = bytearray()
@@ -272,6 +339,10 @@ def fetch_calendar(session=None, previous=None, max_attempts=DEFAULT_MAX_ATTEMPT
                                         last_modified=response.headers.get("Last-Modified"),
                                         not_modified=False, conditional_request=bool(conditional),
                                         attempts=attempt)
+        except requests.exceptions.TooManyRedirects as exc:
+            # A redirect loop is a publisher contract failure; retrying the
+            # same chain cannot fix it.
+            raise FeedError("Calendar redirect loop; inspect publisher configuration") from exc
         except requests.exceptions.RequestException as exc:
             if attempt < max_attempts:
                 _sleep_backoff(attempt, backoff_seconds)

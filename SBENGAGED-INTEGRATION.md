@@ -40,8 +40,14 @@ configured to serve docs/ may publish the new HTML through its existing settings
   cannot resurrect a cancelled listing under the old UID.
 - Public locations are retained. “Sign in to download the location” becomes an
   explicit withheld-location state. No coordinates or rooms are inferred.
-- Enforces calendar content type, supported redirect hosts, response size and
-  timeouts. Robots policy must be retrievable and permit the feed.
+- Enforces calendar content type, response size and timeouts. Every hop of
+  a redirect chain must stay on an approved HTTPS host without embedded
+  credentials, and a redirect loop fails immediately instead of being
+  retried. The origin robots policy must be retrievable and permit the
+  feed; the host a redirect lands on is checked against its own robots
+  policy when it publishes one, and a landing path on the origin host is
+  rechecked against the origin policy. Cookies set during a fetch are
+  never retained; only public metadata is recorded.
 - The current feed expands recurring occurrences. If an RRULE, RECURRENCE-ID,
   RDATE or EXDATE property appears, refresh fails visibly rather than
   silently losing or inventing occurrences.
