@@ -49,7 +49,7 @@ def _date(value) -> tuple[datetime, bool, bool]:
 
 
 def parse_calendar(raw: bytes, now: datetime, days: int = 14) -> tuple[list[dict], dict]:
-    """Select not-ended occurrences in [now, now + days], newest UID wins.
+    """Select not-ended occurrences in [now, now + days], newest revision wins.
 
     An unsupported recurrence is a source-contract failure, not an excuse to
     silently drop occurrences. The currently published feed expands them.
@@ -70,14 +70,33 @@ def parse_calendar(raw: bytes, now: datetime, days: int = 14) -> tuple[list[dict
     newest = {}
     no_uid = 0
     unorderable = 0
+    recurrence = None
     for item in components:
-        # Recurrence-set properties are not expanded by this parser. Any of
-        # them means the occurrence set is unknown, so the feed fails closed
-        # instead of silently dropping or inventing occurrences.
-        if (item.get("RRULE") or item.get("RECURRENCE-ID")
-                or item.get("RDATE") or item.get("EXDATE")):
-            raise FeedError("Recurring-event schema changed; occurrence expansion needs review")
         uid = str(item.get("UID", "")).strip()
+        # Identity is the UID, plus the RECURRENCE-ID for a recurrence
+        # instance (RFC 5546 section 2.1.5, rule 1): an override instance
+        # is a distinct identity from its master record and is never merged
+        # with it during deduplication.
+        recurrence_id = ""
+        rid_prop = item.get("RECURRENCE-ID")
+        if rid_prop is not None:
+            try:
+                rid_value = item.decoded("RECURRENCE-ID")
+            except Exception:
+                rid_value = None
+            recurrence_id = (rid_value.isoformat()
+                             if isinstance(rid_value, (datetime, date))
+                             else str(rid_prop))
+        identity = (uid, recurrence_id)
+        # Recurrence-set properties are not expanded by this parser. The
+        # first offending identity is remembered and the feed fails closed
+        # once deduplication has run, instead of silently dropping or
+        # inventing occurrences.
+        if recurrence is None:
+            for prop in ("RRULE", "RDATE", "EXDATE", "RECURRENCE-ID"):
+                if item.get(prop):
+                    recurrence = (identity, prop)
+                    break
         if not uid:
             no_uid += 1
             continue
@@ -92,20 +111,31 @@ def parse_calendar(raw: bytes, now: datetime, days: int = 14) -> tuple[list[dict
         if not isinstance(modified, datetime):
             modified = datetime.min.replace(tzinfo=timezone.utc)
         modified = modified.replace(tzinfo=timezone.utc) if modified.tzinfo is None else modified
-        # Frozen precedence (P2): SEQUENCE is the revision counter and wins
-        # over LAST-MODIFIED; an exact tie keeps the first occurrence, so a
-        # later exact duplicate (a retransmission, not a revision) cannot
-        # override it.
+        # Revision precedence follows iTIP message sequencing (RFC 5546
+        # section 2.1.5, rule 2): within one identity, the highest SEQUENCE
+        # obsoletes every lower revision, because SEQUENCE is the revision
+        # counter (RFC 5545 section 3.8.7.4), incremented on every
+        # significant change, cancellations included (RFC 5546 section
+        # 2.1.4). LAST-MODIFIED is only a secondary key here; an exact tie
+        # keeps the first occurrence, so a later exact duplicate (a
+        # retransmission, not a revision) cannot override it.
         key = (sequence, modified)
-        if uid not in newest or key > newest[uid][0]:
-            newest[uid] = (key, item)
+        if identity not in newest or key > newest[identity][0]:
+            newest[identity] = (key, item)
+    if recurrence is not None:
+        (ruid, rrid), prop = recurrence
+        where = f"UID {ruid}" if ruid else "a component without a UID"
+        if rrid:
+            where += f", RECURRENCE-ID {rrid}"
+        raise FeedError("Recurring-event schema changed; occurrence expansion "
+                        f"needs review ({prop} on {where})")
     events = []
     cancelled = 0
     out_of_window = 0
     invalid_uid = 0
     unknown_duration = 0
     until = now + timedelta(days=days)
-    for uid, (_, item) in newest.items():
+    for (uid, _instance), (_, item) in newest.items():
         if str(item.get("STATUS", "")).upper() == "CANCELLED":
             cancelled += 1
             continue
@@ -184,7 +214,7 @@ def parse_calendar(raw: bytes, now: datetime, days: int = 14) -> tuple[list[dict
     if invalid_records and invalid_records > max(3, len(components) * .05):
         raise FeedError(f"Too many invalid events ({invalid_records}); keeping the last good snapshot")
     return sorted(events, key=lambda x: (datetime.fromisoformat(x["starts_at"]).timestamp(), x["id"])), dict(
-        source_components=len(components), unique_uids=len(newest), cancelled=cancelled,
+        source_components=len(components), unique_uids=len({u for u, _ in newest}), cancelled=cancelled,
         invalid_records=invalid_records, invalid_uid_records=invalid_uid,
         no_uid_records=no_uid, unorderable_records=unorderable,
         unsupported_recurrence=0, unknown_duration_events=unknown_duration,

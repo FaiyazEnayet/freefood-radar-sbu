@@ -3,6 +3,28 @@
 ## Unreleased
 
 ### Fixed
+- FR2: calendar revision precedence is now documented against its
+  standards source and recurrence instances carry an explicit identity
+  (`src/radar/scrapers/sbengaged.py`, `SBENGAGED-INTEGRATION.md`):
+  - The precedence follows iTIP message sequencing (RFC 5546 section
+    2.1.5): within one identity the highest SEQUENCE obsoletes every
+    lower revision (RFC 5545 section 3.8.7.4), so a cancellation with a
+    higher SEQUENCE wins even when its LAST-MODIFIED is older than the
+    active record's, and the reverse conflict does not. LAST-MODIFIED
+    remains the secondary key; the integration contract records why
+    DTSTAMP is not used as the tie-break for this publisher.
+  - Deduplication identity is the UID plus RECURRENCE-ID for a
+    recurrence instance, so an override instance is never merged with
+    its master record. Recurrence expansion is still unsupported (the
+    publisher feed is already expanded), and the failure a
+    recurrence-set property triggers now names the offending instance.
+  - New regression tests (`test_stage3_freefood_radar_2`, 5 cases in
+    `tests/test_sbengaged.py`) pin the conflicting-revision cancellations
+    in both feed orders, the winning revision's content, the named
+    recurrence failure, and the failed-refresh behavior that keeps the
+    last good snapshot. Full suite: 120 tests passing.
+
+### Fixed
 - P12: the SB Engaged fetch boundary now fails closed on the whole HTTP
   chain (`src/radar/scrapers/sbengaged.py`):
   - A slow or failed origin robots read (timeout, connection error) raises

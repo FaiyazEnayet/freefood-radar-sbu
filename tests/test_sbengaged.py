@@ -59,3 +59,42 @@ def test_successful_refresh_never_substitutes_seed_events(tmp_path):
     data=json.loads((tmp_path/'data/sbengaged-events.json').read_text())
     assert data['classification']=='public_source_snapshot' and len(data['events'])==1
     assert data['events'][0]['source']=='sbengaged'
+
+# --- FR2: revision precedence against its iTIP source (RFC 5546 2.1.5 on
+# RFC 5545 3.8.7.4: the highest SEQUENCE obsoletes every lower revision,
+# regardless of timestamps), and explicit recurrence-instance identity ---
+
+def test_stage3_freefood_radar_2_cancellation_with_higher_sequence_and_older_timestamp_wins():
+    active=event(extra='SEQUENCE:2\r\nLAST-MODIFIED:20261016T000000Z\r\n')
+    cancelled=event(extra='SEQUENCE:5\r\nLAST-MODIFIED:20261015T000000Z\r\nSTATUS:CANCELLED\r\n')
+    for feed in (calendar(active,cancelled),calendar(cancelled,active)):
+        rows,stats=parse_calendar(feed,NOW)
+        assert rows==[] and stats['cancelled']==1
+
+def test_stage3_freefood_radar_2_winning_revision_content_follows_sequence_not_timestamp():
+    stale=event(extra='SEQUENCE:2\r\nLAST-MODIFIED:20261016T000000Z\r\n').replace('Free pizza','Stale title')
+    current=event(extra='SEQUENCE:5\r\nLAST-MODIFIED:20261015T000000Z\r\n').replace('Free pizza','Current title')
+    for feed in (calendar(stale,current),calendar(current,stale)):
+        rows,_=parse_calendar(feed,NOW)
+        assert [row['title'] for row in rows]==['Current title']
+
+def test_stage3_freefood_radar_2_recurrence_failure_names_the_instance_identity():
+    with pytest.raises(FeedError) as caught:
+        parse_calendar(calendar(event(uid='series',extra='RRULE:FREQ=WEEKLY\r\n')),NOW)
+    assert 'series' in str(caught.value)
+
+def test_stage3_freefood_radar_2_recurrence_id_override_is_not_merged_with_its_master():
+    override=event(uid='series',extra='RECURRENCE-ID:20261018T160000Z\r\nSTATUS:CANCELLED\r\n')
+    with pytest.raises(FeedError) as caught:
+        parse_calendar(calendar(event(uid='series'),override),NOW)
+    message=str(caught.value)
+    assert 'RECURRENCE-ID' in message and 'series' in message
+
+def test_stage3_freefood_radar_2_recurrence_feed_fails_the_refresh_and_keeps_the_snapshot(tmp_path):
+    p=tmp_path/'data';p.mkdir();good={'fetched_at':'2026-10-16T12:00:00+00:00','events':[{'id':'keep'}]}
+    (p/'sbengaged-events.json').write_text(json.dumps(good))
+    recurring=calendar(event(extra='RRULE:FREQ=WEEKLY\r\n'))
+    assert refresh(tmp_path,now=NOW,fetcher=lambda:(recurring,{}),scorer=lambda rows,root:{'test_model':True}) is False
+    assert json.loads((p/'sbengaged-events.json').read_text())==good
+    status=json.loads((p/'sbengaged-status.json').read_text())
+    assert status['success'] is False and 'Recurring' in status['error']
