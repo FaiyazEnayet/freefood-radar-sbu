@@ -90,12 +90,18 @@ def score_snapshot(events: list[dict], root: Path) -> dict:
     scored = score_events([Event.from_dict(e) for e in events], model)
     for row, prediction in zip(events, scored):
         row.update(food_probability=prediction.food_probability, score=prediction.score,
-                   food_keywords=prediction.food_keywords)
+                   food_keywords=prediction.food_keywords,
+                   offer_likelihood=prediction.offer_likelihood,
+                   evidence_categories=prediction.evidence_categories,
+                   access_caveats=prediction.access_caveats,
+                   eligibility=prediction.eligibility,
+                   evidence_status=prediction.evidence_status)
     return dict(recipe="Repository TF-IDF + logistic regression + sigmoid calibration, cv=3",
                 seed=split["seed"], training_rows=len(texts), labeled_rows=len(labeled),
                 labeled_sha256=hashlib.sha256(path.read_bytes()).hexdigest(), sklearn_version=sklearn.__version__,
                 config=MODEL_CONFIG, config_sha256=model_config_hash(),
-                validation="Historical labeled-text evaluation is not validated live-feed precision/recall")
+                validation="Historical labeled-text evaluation is not validated live-feed precision/recall",
+                estimate_notice="Snapshot scores are unverified model estimates (classifier signal combined with deterministic text evidence), not confirmed free-food listings")
 
 
 def _previous_selected(previous) -> int | None:

@@ -5,6 +5,11 @@ scaling (CalibratedClassifierCV, sigmoid) so the output probabilities
 are actually calibrated: a 0.8 should mean food four times out of five.
 
 Trained on data/labeled.csv (hand-labeled SBU-style event blurbs).
+
+The probabilities are one candidate signal. Digest scoring combines
+them with the deterministic text evidence in radar.features
+(analyze_evidence); the classifier output alone is never treated as
+proof that food is complimentary.
 """
 
 from __future__ import annotations
