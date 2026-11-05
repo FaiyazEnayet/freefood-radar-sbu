@@ -118,3 +118,87 @@ transferred to GitHub Actions. Withheld fields can be viewed on the official
 event page after university sign-in. Automating private access requires a
 university-approved interface or service identity; do not store personal
 credentials or session cookies in this repository.
+
+## Operations runbook
+
+Day-to-day operation of the feed: what runs when, what a failure means, and
+where the state lives. Everything here can be exercised offline: the test
+suite and a fixture refresh need no network, and the only network operation
+in the project is the explicit feed fetch.
+
+### Daily schedule
+
+The workflow `.github/workflows/sbengaged.yml` (Refresh public SB Engaged
+events) runs daily at 11:17 UTC, about 7:17 a.m. New York in daylight time
+and 6:17 a.m. in standard time. It also runs on pushes that touch the
+integration code and on demand through Run workflow. Each run executes the
+feed contract tests, refreshes the rolling 14-day snapshot, validates the
+publication artifacts, and commits only those artifacts. GitHub can delay
+or disable scheduled jobs, including on inactive repositories; if snapshots
+stop advancing, first check that the workflow is still enabled.
+
+### When a run fails
+
+The refresh step may fail without immediately failing the job, so validation
+and the last good state still run; the final step then fails the run and
+points at `data/sbengaged-status.json`. Read a failed run in this order:
+
+1. The closing step confirms the refresh itself failed.
+2. The status file (the committed copy on the default branch is the newest
+   record) carries the failure state and the row diagnostics.
+3. The refresh step log carries the feed error: robots policy, a redirect
+   hop, response size, or the parse stage that rejected the feed.
+
+A failed refresh never publishes demonstration events and never overwrites
+the last good snapshot. Known open item: the scheduled refresh on the
+evening of Thu Oct 29, 2026 (America/New_York) failed and has not yet been
+investigated. Work it by the steps above and record the cause here once it
+is known.
+
+### Last good snapshots
+
+`data/sbengaged-events.json` is the last good snapshot and
+`data/sbengaged-status.json` is its companion status: source URL, fetch
+time, source-body hash, window, count classification and diagnostics.
+`docs/dashboard.html` is rendered from the two of them. Last good means the
+newest snapshot that passed validation. A suspect or failed result is
+recorded in the status file only; it replaces the snapshot solely after a
+second identical observation confirms it, a verified-empty feed excepted.
+
+### Source schema changes
+
+The parser is deliberately strict about schema surprises. A component
+carrying RRULE, RDATE, EXDATE or RECURRENCE-ID fails the refresh visibly,
+because the publisher feed arrives already expanded; so does a malformed
+share above the contract threshold. If the publisher changes the feed
+shape: read the feed error, identify the contract clause it tripped, add a
+fixture under `tests/fixtures/` reproducing the new shape, and only then
+change parser and contract together. Event identity is the source UID,
+plus RECURRENCE-ID for a recurrence instance; a changed UID is a new
+listing by design, not a parsing bug.
+
+### Data rights
+
+The feed is public, advertised on the SB Engaged events page, and ingestion
+uses no login. No credentials, session cookies or private tokens are stored
+in this repository or in any artifact it publishes. Locations the publisher
+withholds behind sign-in stay withheld: the snapshot records the explicit
+withheld state, and rooms or coordinates are never inferred. One known
+limitation: withholding is detected from the publisher's sign-in wording in
+the location text, so a withheld location phrased differently would read as
+public until the detector learns the new wording. Do not work around a
+withheld field; viewing it is a signed-in human action on the official
+event page.
+
+### Model retraining decisions
+
+The repository ships no classifier binary. Every refresh refits the
+existing TF-IDF/logistic/sigmoid recipe on the original seed-7, 75%
+training split of `data/labeled.csv`, and records the training-data hash,
+recipe, seed and inference library version in the snapshot diagnostics. The
+refit never trains on the held-out labels and never overwrites the
+historical evaluation metrics; scores on real feed text remain unverified
+model estimates. Retraining decisions follow from that split: the recipe
+changes only through a reviewed code change, never as part of a refresh,
+and only with new human-reviewed labels or a demonstrated regression behind
+it, evaluated on the held-out split before adoption.
