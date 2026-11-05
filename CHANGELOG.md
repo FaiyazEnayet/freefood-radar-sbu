@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Changed
+- P3: event scoring now separates the questions the old single signal
+  conflated (`src/radar/features.py`, `src/radar/digest.py`,
+  `src/radar/models.py`, `src/radar/live.py`):
+  - A structured evidence layer reads each title/description into
+    categories: explicit complimentary offer, indirect mention, priced
+    sale, bring-your-own, negated offer, restricted eligibility, RSVP
+    prerequisite, limited quantity, and insufficient evidence.
+    Deterministic high-precision patterns decide the explicit
+    categories; the trained classifier remains one candidate signal,
+    combined under the evidence and never treated as proof on its own.
+  - The ranking probability is now the likelihood of a complimentary
+    offer. Access and quality caveats travel as separate neutral flags
+    on the event and in snapshot rows, and eligibility is reported as
+    general or restricted instead of being baked into the score.
+  - "While supplies last", "limited" and "RSVP" no longer add quality
+    points in `quality_score`; they are caveats, not extra value.
+  - When positive and negative evidence conflict, the event is marked
+    uncertain and held out of the ranked digest for review instead of
+    being guessed at. A bare food mention stays below the ranking
+    threshold however confident the classifier is.
+  - Scores are described everywhere as unverified model estimates.
+    The historical labeled-data metrics stay untouched for comparison;
+    a label-based ranking comparison is still deferred until vouched
+    held-out labels exist, and no improvement is claimed.
+  - New fixture tests (`test_stage3_freefood_radar_3`, 14 cases) pin
+    the eight adversarial phrases, the conflict abstention, the
+    differing eligibility flags, and the no-extra-value caveats.
+    Full suite: 134 tests passing.
+
 ### Fixed
 - FR2: calendar revision precedence is now documented against its
   standards source and recurrence instances carry an explicit identity

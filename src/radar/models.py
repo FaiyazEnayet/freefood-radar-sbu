@@ -21,6 +21,12 @@ class Event:
     food_probability: float = 0.0
     food_keywords: list[str] = field(default_factory=list)
     score: float = 0.0
+    # Filled in by the evidence layer during digest scoring:
+    offer_likelihood: float = 0.0
+    evidence_categories: list[str] = field(default_factory=list)
+    access_caveats: list[str] = field(default_factory=list)
+    eligibility: str = "unspecified"  # "general" | "restricted" | "unspecified"
+    evidence_status: str = "unscored"  # "scored" | "uncertain" | "insufficient_evidence" | "unscored"
 
     def text(self) -> str:
         return f"{self.title}\n{self.description}".strip()
