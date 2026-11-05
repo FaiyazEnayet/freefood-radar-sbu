@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added
+- FR7: an operations runbook now closes `SBENGAGED-INTEGRATION.md`. It
+  covers the six things a maintainer needs without reading the workflow
+  source: the daily 11:17 UTC refresh schedule, how to read a failed run
+  (the scheduled refresh of Thu Oct 29, 2026 is recorded there as failed
+  and not yet investigated), where the last good snapshots live and when a
+  suspect result may replace one, how source schema changes are handled,
+  the feed's data rights (public ingestion, withheld locations stay
+  withheld, plus the wording-based detector's known limitation), and the
+  model retraining decision rule (reviewed recipe changes only, never on
+  the held-out labels). New tests (`test_stage3_freefood_radar_7`, 9
+  cases) pin the runbook's coverage of all six topics, prove a fixture
+  refresh completes with networking blocked, that importing the
+  integration performs no fetch, and that the published JSON artifacts
+  carry no authentication-shaped data. Full suite: 143 tests passing.
+
 ### Changed
 - P3: event scoring now separates the questions the old single signal
   conflated (`src/radar/features.py`, `src/radar/digest.py`,
