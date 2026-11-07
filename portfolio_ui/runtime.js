@@ -566,6 +566,10 @@ function food(){
 
    card.append(el('p','confidence',e.food_probability==null?'Model score unavailable':Math.round(e.food_probability*100)+'% model probability · ranking score '+nfmt(e.score,2)));
 
+   const caveats=Array.isArray(e.access_caveats)?e.access_caveats.filter(Boolean).map(value=>value.replaceAll('_',' ')).join(' · '):e.access_caveats;
+   if(caveats)card.append(el('p','caption','Access caveats: '+caveats));
+   if(e.eligibility)card.append(el('p','caption','Eligibility: '+e.eligibility));
+
    const detail=el('details'),summary=el('summary','','Inspect source description and food signals');detail.append(summary,el('p','',e.description),el('p','caption','Matched food terms: '+(e.food_keywords.join(', ')||'none')+'. A mention does not establish that food is free or still available.'));card.append(detail);
 
    const actions=el('div','controls'),link=el('a','','View official event ↗');link.href=e.url;link.target='_blank';link.rel='noopener';const save=el('button','',saved.has(e.id)?'Remove saved event':'Save event');save.setAttribute('aria-pressed',saved.has(e.id));save.onclick=()=>{saved.has(e.id)?saved.delete(e.id):saved.add(e.id);try{localStorage.setItem('sbengaged-watchlist',JSON.stringify([...saved]))}catch{}render()};actions.append(link,save);card.append(actions);list.append(card);
