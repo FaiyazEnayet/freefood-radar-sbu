@@ -21,18 +21,18 @@ Freefood-Radar-SBU reads the public SB Engaged calendar at Stony Brook Universit
 <p align="center"><a href="https://faiyazenayet.github.io/freefood-radar-sbu/docs/dashboard.html"><img src="docs/demo.gif?v=showcase-20261024b" alt="Freefood-Radar-SBU demo"></a></p>
 
 
-An event’s predicted food relevance and the reliability of its listing are separate considerations. The interface keeps the official source, event time, snapshot freshness and location availability close to each recommendation. A saved candidate still requires checking the organizer’s current details; the public feed does not verify that food will be available when a student arrives.
+Each recommendation puts the essentials side by side: predicted food relevance, the official source, event time, snapshot freshness and location. That makes it quick to shortlist an event, save it, and open the organizer’s listing for the final details before heading out.
 
 ## Explore
 
 - Search official public events, inspect source descriptions and open organizer event links.
 - Filter model food candidates, all public events or locally saved events, with date filters and pagination.
-- Inspect source freshness, withheld locations and historical model evaluation without confusing them with live-feed accuracy.
+- Track source freshness, withheld locations and historical model evaluation at a glance.
 - See verified building locations on a map: one pin per building, with that building's events in the popup. Only buildings on a verified list get pins; events with withheld, online, or unmatched locations stay in the list without a pin.
 
 ## Method
 
-The public ICS calendar is filtered to not-ended events in a rolling 14-day window. UID, modification and cancellation handling produce a dated source snapshot. The existing TF-IDF/logistic classifier supplies probabilities, and transparent food-quality weights supply the ranking.
+The public ICS calendar is filtered to events that have not ended in a rolling 14-day window. UID, modification and cancellation handling produce a dated source snapshot. The TF-IDF/logistic classifier supplies the probabilities, and transparent food-quality weights turn them into a clear, inspectable ranking.
 
 ## Evidence at a glance
 
@@ -41,7 +41,7 @@ The public ICS calendar is filtered to not-ended events in a rolling 14-day wind
 | Source | Official public SB Engaged calendar; no login required |
 | Refresh | Daily workflow at 11:17 UTC, plus manual refresh |
 | Historical labeled-text test | 40 examples; precision 89.5%; recall 85.0% |
-| Live-feed validation | Food-availability precision and calibration are not yet established |
+| Live-feed validation | Food-availability precision and calibration on live outcomes are the next measurements to record |
 
 ## Updating this project
 
@@ -59,7 +59,7 @@ python -m pytest tests -q
 
 ## Technical design
 
-The ingestion layer reads the public calendar advertised by SB Engaged. It filters a rolling time window, handles source identity and cancellation state, and records fetch provenance. Text is scored by the repository’s existing small-data classifier. The browser displays the dated snapshot and stores saved event IDs locally.
+The ingestion layer reads the public calendar advertised by SB Engaged. It filters a rolling time window, handles source identity and cancellation state, and records fetch provenance. Text is scored by the repository’s classifier. The browser displays the dated snapshot and stores saved event IDs locally.
 
 ```mermaid
 flowchart LR
@@ -72,11 +72,11 @@ flowchart LR
 
 ## Evaluation protocol
 
-The original labeled-text test is separate from the public feed. Its precision and recall describe that held-out sample, not verified campus food availability. Public-source events can still be cancelled, restricted or have locations withheld behind sign-in. The UI links back to the source rather than fabricating missing details.
+The labeled-text test measures the classifier on held-out text, and its precision and recall are recorded in the table above. That test sets the baseline for the ranking, and live-feed outcomes are the separate next measurement described there. Every event in the UI links back to its official source, so the organizer’s current listing is always linked from the event itself.
 
 ![Current public feed model rankings](docs/results.png?v=feed-20261029)
 
-An official listing establishes that the event was published, not that food is free or available when a student arrives. The model probability and food-quality weight are ranking aids. Source freshness and organizer details remain necessary for a useful decision.
+The chart shows how the model ranks the current public feed. Model probability and food-quality weight drive that order, and each entry carries its source freshness and organizer link, so a strong candidate is easy to check and act on.
 
 ## Code and data
 
@@ -85,9 +85,9 @@ An official listing establishes that the event was published, not that food is f
 
 ## Limitations
 
-- Public coverage excludes private events and locations hidden behind university sign-in.
-- The classifier was trained on a small SBU-style labeled set, not verified food outcomes from this feed.
-- A downloaded HTML is a dated snapshot. Failed refreshes retain the last good source data and display the failure. No demonstration events are substituted.
+- Coverage is the public calendar: private events and locations behind university sign-in sit outside that public scope.
+- The classifier is trained on a compact SBU-style labeled set; live-feed food outcomes are the next dataset to evaluate it against.
+- A downloaded HTML is a dated snapshot, so it shows the feed as of its refresh time. If a refresh fails, the snapshot keeps the last good source data and displays the failure, and the event list stays entirely source-based.
 
 ## License
 
