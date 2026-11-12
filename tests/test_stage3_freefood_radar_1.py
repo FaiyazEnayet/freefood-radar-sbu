@@ -6,6 +6,7 @@ acceptance fixtures semantically on the rendered evidence payload and the
 publication boundary; they do not change the dashboard HTML.
 """
 import json
+from copy import deepcopy
 import re
 import shutil
 import sys
@@ -152,16 +153,16 @@ def test_stage3_freefood_radar_1_rejects_seeded_snapshot(tmp_path):
 
 
 def test_stage3_freefood_radar_1_validate_publication_contract():
-    good = {"classification": "public_source_snapshot", "schema_version": 1,
-            "events": [{"id": "abc123", "source": "sbengaged"}]}
+    good = json.loads((REPO_ROOT / "tests/fixtures/schema-v2-consumer.json").read_text())["snapshot"]
     assert validate_publication_snapshot(good) == []
-    seeded = {"classification": "public_source_snapshot", "schema_version": 1,
-              "events": [{"id": "seed-001", "source": "instagram"}]}
+    seeded = deepcopy(good)
+    seeded["events"][0].update(id="seed-001", source="instagram")
     assert validate_publication_snapshot(seeded)
-    wrong_class = {"classification": "demo", "schema_version": 1, "events": []}
+    wrong_class = deepcopy(good)
+    wrong_class["classification"] = "demo"
     assert validate_publication_snapshot(wrong_class)
-    wrong_schema = {"classification": "public_source_snapshot", "schema_version": 2,
-                    "events": []}
+    wrong_schema = deepcopy(good)
+    wrong_schema["schema_version"] = 3
     assert validate_publication_snapshot(wrong_schema)
     assert validate_publication_snapshot("not a dict")
     assert validate_publication_snapshot(None)

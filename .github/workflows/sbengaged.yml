@@ -51,24 +51,25 @@ jobs:
           python - <<'PYEOF'
           import json, sys
           from pathlib import Path
+          sys.path.insert(0, 'src')
+          from radar.schema import validate_snapshot, validate_status
           p = Path('data/sbengaged-events.json')
           if p.exists():
               data = json.loads(p.read_text(encoding='utf8'))
-              assert data.get('classification') == 'public_source_snapshot', \
-                  f"bad classification: {data.get('classification')!r}"
-              assert data.get('schema_version') == 1, \
-                  f"bad schema_version: {data.get('schema_version')!r}"
-              bad = [e.get('id') for e in data.get('events', [])
-                     if e.get('source') == 'seed'
-                     or str(e.get('id', '')).startswith('seed-')
-                     or e.get('source') != 'sbengaged']
-              if bad:
-                  print(f"REJECTED: seeded/non-public records in publication artifact: {bad[:5]}")
+              problems = validate_snapshot(data)
+              if problems:
+                  print('REJECTED publication snapshot: ' + '; '.join(problems))
                   sys.exit(1)
               print(f"OK: {len(data.get('events', []))} public-source events")
           else:
               print("No public source snapshot exists; status-only dashboard expected, "
                     "no silent fallback.")
+          status = Path('data/sbengaged-status.json')
+          if status.exists():
+              problems = validate_status(json.loads(status.read_text(encoding='utf8')))
+              if problems:
+                  print('REJECTED refresh status: ' + '; '.join(problems))
+                  sys.exit(1)
           PYEOF
       - name: Commit only generated public artifacts
         if: always() && steps.refresh.outcome != 'skipped' && steps.validate.outcome == 'success'

@@ -9,6 +9,7 @@ from pathlib import Path
 import os
 
 from .scrapers.sbengaged import FEED_URL, LISTING_URL, fetch_calendar, parse_calendar
+from .schema import SCHEMA_VERSION, validate_snapshot, validate_status
 
 # A count drop is "severe" only against a snapshot with enough events for
 # the ratio to mean something; below that, small absolute changes dominate.
@@ -27,7 +28,6 @@ MODEL_CONFIG = {
     "calibration": {"method": "sigmoid", "cv": 3},
     "training_split": {"test_size": 0.25, "seed": 7, "stratify": True},
 }
-SCHEMA_VERSION = 1
 
 
 def _canonical_hash(value) -> str:
@@ -206,12 +206,21 @@ def refresh(root: Path, days: int = 14, now=None, fetcher=fetch_calendar, scorer
     status_path = root / "data/sbengaged-status.json"
     previous = json.loads(snapshot_path.read_text(encoding="utf8")) if snapshot_path.exists() else None
     previous_status = json.loads(status_path.read_text(encoding="utf8")) if status_path.exists() else {}
+    if previous is not None:
+        problems = validate_snapshot(previous)
+        if problems:
+            raise ValueError("Invalid previous public snapshot: " + "; ".join(problems))
+    if status_path.exists():
+        problems = validate_status(previous_status)
+        if problems:
+            raise ValueError("Invalid previous refresh status: " + "; ".join(problems))
     previous_count = _previous_selected(previous)
     previous_http = _previous_source_http(previous)
-    previous_lineage = (previous or {}).get("lineage") or {}
+    previous_lineage = dict((previous or {}).get("lineage") or {})
+    previous_lineage["schema_version"] = SCHEMA_VERSION
     # Status etag / last_modified always describe the snapshot on disk
     # (the last good one), never a suspect or failed fetch.
-    status = dict(last_attempt_at=now.isoformat(), success=False,
+    status = dict(schema_version=SCHEMA_VERSION, last_attempt_at=now.isoformat(), success=False,
                   last_successful_fetch_at=previous.get("fetched_at") if previous else None,
                   count_change=None, previous_selected_events=previous_count,
                   selected_events=None,
@@ -237,7 +246,7 @@ def refresh(root: Path, days: int = 14, now=None, fetcher=fetch_calendar, scorer
             if previous is None:
                 status.update(success=False, state="failed", not_modified=True,
                               error="Not-modified response with no previous snapshot to preserve")
-                atomic_json(status_path, status)
+                _write_status(status_path, status, previous_status)
                 return False
             status.update(success=True, state="fresh", not_modified=True,
                           last_successful_fetch_at=now.isoformat(),
@@ -251,9 +260,10 @@ def refresh(root: Path, days: int = 14, now=None, fetcher=fetch_calendar, scorer
                               http.get("last_modified") or previous_http.get("last_modified"),
                               _previous_model_hash(previous)),
                           model_sha256=_previous_model_hash(previous))
-            atomic_json(status_path, status)
+            _write_status(status_path, status, previous_status)
             return True
         events, diagnostics = parse_calendar(raw, now, days)
+        diagnostics["schema_version"] = SCHEMA_VERSION
         status["selected_events"] = diagnostics["selected_events"]
         state, suspect = _count_change(previous_count, diagnostics)
         if suspect:
@@ -271,9 +281,13 @@ def refresh(root: Path, days: int = 14, now=None, fetcher=fetch_calendar, scorer
                     error=(f"Suspected source problem: {state} ({previous_count} -> "
                            f"{diagnostics['selected_events']} selected events); keeping the "
                            "last good snapshot until a repeat observation confirms it"))
-                atomic_json(status_path, status)
+                _write_status(status_path, status, previous_status)
                 return False
         model = scorer(events, root)
+        model = dict(model)
+        model["schema_version"] = SCHEMA_VERSION
+        for event in events:
+            event["schema_version"] = SCHEMA_VERSION
         model_hash = _model_hash(model)
         diagnostics = {**diagnostics, "count_change": state,
                        "previous_selected_events": previous_count}
@@ -284,14 +298,30 @@ def refresh(root: Path, days: int = 14, now=None, fetcher=fetch_calendar, scorer
                        source={"name": "SB Engaged public calendar", "url": FEED_URL, "listing_url": LISTING_URL, **http},
                        coverage="Public calendar only; private events and withheld locations are unavailable",
                        model=model, diagnostics=diagnostics, events=events, lineage=lineage)
-        atomic_json(snapshot_path, payload)
+        problems = validate_snapshot(payload)
+        if problems:
+            raise ValueError("Invalid public snapshot: " + "; ".join(problems))
         status.update(success=True, state="fresh", last_successful_fetch_at=now.isoformat(), error=None,
                       count_change=state, pending_count_change=None,
                       etag=http.get("etag"), last_modified=http.get("last_modified"),
                       lineage=lineage, model_sha256=model_hash)
+        problems = validate_status(status, previous_last_success=previous_status.get(
+            "last_successful_fetch_at"))
+        if problems:
+            raise ValueError("Invalid refresh status: " + "; ".join(problems))
+        atomic_json(snapshot_path, payload)
     except Exception as exc:
         # Deliberately keep the last good source data, with explicit failed status.
         status["error"] = f"{type(exc).__name__}: {exc}"
         status["state"] = "stale" if previous is not None else "failed"
-    atomic_json(status_path, status)
+    _write_status(status_path, status, previous_status)
     return status["success"]
+
+
+def _write_status(path, status, previous_status):
+    """Validate the health record before it becomes visible to consumers."""
+    previous_last_good = previous_status.get("last_successful_fetch_at")
+    problems = validate_status(status, previous_last_success=previous_last_good)
+    if problems:
+        raise ValueError("Invalid refresh status: " + "; ".join(problems))
+    atomic_json(path, status)

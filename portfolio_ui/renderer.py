@@ -30,6 +30,10 @@ def validate_publication_snapshot(payload):
  event whose source is not the public SB Engaged feed."""
  problems=[]
  if not isinstance(payload,dict):return ['snapshot payload is not a JSON object']
+ if payload.get('schema_version') in (1,2):
+  sys.path.insert(0,str(HERE.parent/'src'))
+  from radar.schema import validate_snapshot
+  return validate_snapshot(payload)
  if payload.get('classification')!=PUBLIC_SNAPSHOT_CLASSIFICATION:problems.append('classification is %r, expected %r'%(payload.get('classification'),PUBLIC_SNAPSHOT_CLASSIFICATION))
  if payload.get('schema_version')!=PUBLIC_SNAPSHOT_SCHEMA_VERSION:problems.append('schema_version is %r, expected %r'%(payload.get('schema_version'),PUBLIC_SNAPSHOT_SCHEMA_VERSION))
  events=payload.get('events')
@@ -41,6 +45,18 @@ def validate_publication_snapshot(payload):
    if src=='seed' or eid.startswith(SEED_ID_PREFIX):problems.append('seeded record %r in publication payload'%eid);break
    if src!=PUBLIC_EVENT_SOURCE:problems.append('event %r has non-public source %r'%(eid,src));break
  return problems
+
+def _production_status(root):
+ """Load health data only when its declared schema is recognized."""
+ path=Path(root)/'data/sbengaged-status.json'
+ if not path.exists():return {}
+ payload=json.loads(path.read_text(encoding='utf8'))
+ if isinstance(payload,dict):
+  sys.path.insert(0,str(HERE.parent/'src'))
+  from radar.schema import validate_status
+  problems=validate_status(payload)
+  if problems:raise ValueError('Refusing to render the production dashboard: '+'; '.join(problems))
+ return payload
 def _production_figures(figures):
  """Keep separately labeled historical evaluation figures at their indices.
 
@@ -158,13 +174,13 @@ def enrich(d,soup,root,mode='production'):
   if load_error is not None:raise ValueError('Refusing to render the production dashboard: data/sbengaged-events.json is not valid JSON (%s)'%load_error)
   if payload is None:
    d['no_snapshot']=True
-   d['sbengaged_status']=jsonfile(root,'data/sbengaged-status.json') if (root/'data/sbengaged-status.json').exists() else {}
+   d['sbengaged_status']=_production_status(root)
    d['figures']=[]
   else:
    problems=validate_publication_snapshot(payload)
    if problems:raise ValueError('Refusing to render the production dashboard: '+'; '.join(problems))
    d['sbengaged']=payload
-   d['sbengaged_status']=jsonfile(root,'data/sbengaged-status.json') if (root/'data/sbengaged-status.json').exists() else {}
+   d['sbengaged_status']=_production_status(root)
    c['classification']='Public SB Engaged source snapshot; separate historical labeled-text model evaluation'
    c['brief']='SB Engaged public calendar / food predictions'
    c['limits']=['Public calendar coverage only; private events and withheld locations are unavailable.', 'Event facts come from SB Engaged; food probabilities are model estimates and food availability is unverified.', 'Historical classifier evaluation does not establish accuracy or calibration on the live public feed.', 'The HTML is a dated offline snapshot. Refresh occurs through the supplied daily workflow or manual refresh script, not in the browser.', 'On refresh failure the last successful public snapshot is retained with an explicit error status. No demonstration events replace real source data.']

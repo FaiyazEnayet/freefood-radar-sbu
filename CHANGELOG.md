@@ -3,6 +3,20 @@
 ## Unreleased
 
 ### Added
+- P11: refresh output and dashboard consumers now share a version 2
+  contract for snapshots, status, diagnostics, model provenance, lineage,
+  and event records (`src/radar/schema.py`, `src/radar/live.py`,
+  `portfolio_ui/renderer.py`). It checks finite scores and nullability,
+  canonical unique event IDs, timestamp ordering, source and status
+  allowlists, count consistency, and the rule that a classifier cannot
+  mark food as verified. Invalid versioned data stops before publication
+  with a visible error. Complete version 1 snapshots and status records
+  remain readable during the transition. A shared synthetic JSON fixture
+  demonstrates the consumer format without representing live events.
+  New tests (`test_stage3_freefood_radar_11`, 20 cases) cover round-trips
+  for FR1 count-change states and rejected malformed records. The baseline
+  at `02cac68`: 143 tests passing; after P11: 163 tests passing.
+
 - FR7: an operations runbook now closes `SBENGAGED-INTEGRATION.md`. It
   covers the six things a maintainer needs without reading the workflow
   source: the daily 11:17 UTC refresh schedule, how to read a failed run

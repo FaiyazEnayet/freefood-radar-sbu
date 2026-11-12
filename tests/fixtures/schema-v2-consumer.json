@@ -1,0 +1,97 @@
+{
+  "fixture_type": "synthetic_consumer_contract_example",
+  "snapshot": {
+    "schema_version": 2,
+    "classification": "public_source_snapshot",
+    "fetched_at": "2026-10-17T12:00:00+00:00",
+    "source": {
+      "name": "SB Engaged public calendar",
+      "url": "https://sbengaged.stonybrook.edu/ical/stonybrook/ical_stonybrook.ics",
+      "listing_url": "https://sbengaged.stonybrook.edu/"
+    },
+    "coverage": "Synthetic contract fixture; contains no published event data.",
+    "model": {
+      "schema_version": 2,
+      "recipe": "fixture model",
+      "config_sha256": "c7a3a8c7435ef8e4cf1ca2d261f7e09ca85de6cdb70f7c689a836680523a180c"
+    },
+    "diagnostics": {
+      "schema_version": 2,
+      "source_components": 1,
+      "unique_uids": 1,
+      "cancelled": 0,
+      "invalid_records": 0,
+      "invalid_uid_records": 0,
+      "no_uid_records": 0,
+      "unorderable_records": 0,
+      "unsupported_recurrence": 0,
+      "unknown_duration_events": 0,
+      "out_of_window": 0,
+      "selected_events": 1,
+      "source_sha256": "feccc439aca5debd0208adb22aa1df1ab3c43de25dac31033b9f3625f815a68e",
+      "window_start": "2026-10-17T12:00:00+00:00",
+      "window_end": "2026-10-31T12:00:00+00:00",
+      "count_change": "initial",
+      "previous_selected_events": null
+    },
+    "events": [
+      {
+        "schema_version": 2,
+        "id": "e2dfad093864f303ca0d",
+        "uid": "fixture-event-001",
+        "title": "Synthetic fixture event",
+        "description": "Contract example only.",
+        "club": "",
+        "location": "",
+        "location_visibility": "not_listed",
+        "starts_at": "2026-10-20T12:00:00-04:00",
+        "ends_at": null,
+        "all_day": false,
+        "timezone": "America/New_York",
+        "floating_time_assumed": false,
+        "duration_unknown": true,
+        "url": "https://example.org/events/fixture",
+        "source": "sbengaged",
+        "source_updated_at": null,
+        "food_probability": null,
+        "score": null,
+        "food_keywords": [],
+        "food_verified": false
+      }
+    ],
+    "lineage": {
+      "schema_version": 2,
+      "source_url": "https://sbengaged.stonybrook.edu/ical/stonybrook/ical_stonybrook.ics",
+      "source_sha256": "feccc439aca5debd0208adb22aa1df1ab3c43de25dac31033b9f3625f815a68e",
+      "source_etag": null,
+      "source_last_modified": null,
+      "model_sha256": "c7a3a8c7435ef8e4cf1ca2d261f7e09ca85de6cdb70f7c689a836680523a180c"
+    }
+  },
+  "status": {
+    "schema_version": 2,
+    "last_attempt_at": "2026-10-17T12:00:00+00:00",
+    "success": true,
+    "last_successful_fetch_at": "2026-10-17T12:00:00+00:00",
+    "count_change": "initial",
+    "previous_selected_events": null,
+    "selected_events": 1,
+    "pending_count_change": null,
+    "state": "fresh",
+    "not_modified": false,
+    "conditional_request": false,
+    "etag": null,
+    "last_modified": null,
+    "attempts": 1,
+    "lineage": {
+      "schema_version": 2,
+      "source_url": "https://sbengaged.stonybrook.edu/ical/stonybrook/ical_stonybrook.ics",
+      "source_sha256": "feccc439aca5debd0208adb22aa1df1ab3c43de25dac31033b9f3625f815a68e",
+      "source_etag": null,
+      "source_last_modified": null,
+      "model_sha256": "c7a3a8c7435ef8e4cf1ca2d261f7e09ca85de6cdb70f7c689a836680523a180c"
+    },
+    "model_sha256": "c7a3a8c7435ef8e4cf1ca2d261f7e09ca85de6cdb70f7c689a836680523a180c",
+    "error": null
+  }
+}
