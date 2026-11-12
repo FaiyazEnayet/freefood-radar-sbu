@@ -186,7 +186,7 @@ def test_stage3_freefood_radar_4_no_retry_on_404():
 def test_stage3_freefood_radar_4_success_carries_lineage_state_and_model_hash(tmp_path):
     good = seed(tmp_path)
     lineage = good['lineage']
-    assert lineage['schema_version'] == 1
+    assert lineage['schema_version'] == 2
     assert lineage['source_sha256'] == hashlib.sha256(fixture('sbengaged_full.ics')).hexdigest()
     assert lineage['source_url'] == FEED_URL
     assert len(lineage['model_sha256']) == 64

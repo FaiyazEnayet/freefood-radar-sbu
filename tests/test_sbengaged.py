@@ -1,5 +1,5 @@
 """Source-contract and failure behavior tests; no network needed."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import sys
 from pathlib import Path
@@ -46,8 +46,11 @@ def test_rejects_external_or_unsafe_links():
     assert rows==[] and stats['invalid_records']==1
 
 def test_failed_refresh_preserves_last_good_snapshot(tmp_path):
-    p=tmp_path/'data';p.mkdir();good={'fetched_at':'2026-10-16T12:00:00+00:00','events':[{'id':'keep'}]}
-    (p/'sbengaged-events.json').write_text(json.dumps(good))
+    p=tmp_path/'data';p.mkdir()
+    seeded_at=NOW-timedelta(days=1)
+    assert refresh(tmp_path,now=seeded_at,fetcher=lambda:(calendar(event()),{}),
+                   scorer=lambda rows,root:{'test_model':True})
+    good=json.loads((p/'sbengaged-events.json').read_text())
     def fail():raise FeedError('HTTP 503')
     assert refresh(tmp_path,now=NOW,fetcher=fail) is False
     assert json.loads((p/'sbengaged-events.json').read_text())==good
@@ -91,8 +94,11 @@ def test_stage3_freefood_radar_2_recurrence_id_override_is_not_merged_with_its_m
     assert 'RECURRENCE-ID' in message and 'series' in message
 
 def test_stage3_freefood_radar_2_recurrence_feed_fails_the_refresh_and_keeps_the_snapshot(tmp_path):
-    p=tmp_path/'data';p.mkdir();good={'fetched_at':'2026-10-16T12:00:00+00:00','events':[{'id':'keep'}]}
-    (p/'sbengaged-events.json').write_text(json.dumps(good))
+    p=tmp_path/'data';p.mkdir()
+    seeded_at=NOW-timedelta(days=1)
+    assert refresh(tmp_path,now=seeded_at,fetcher=lambda:(calendar(event()),{}),
+                   scorer=lambda rows,root:{'test_model':True})
+    good=json.loads((p/'sbengaged-events.json').read_text())
     recurring=calendar(event(extra='RRULE:FREQ=WEEKLY\r\n'))
     assert refresh(tmp_path,now=NOW,fetcher=lambda:(recurring,{}),scorer=lambda rows,root:{'test_model':True}) is False
     assert json.loads((p/'sbengaged-events.json').read_text())==good

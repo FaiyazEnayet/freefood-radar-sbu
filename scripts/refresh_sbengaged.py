@@ -31,7 +31,11 @@ def run_refresh(root, days, fetcher=None, scorer=None, now=None):
         kw["fetcher"] = fetcher
     if scorer is not None:
         kw["scorer"] = scorer
-    succeeded = refresh(root, days, **kw)
+    try:
+        succeeded = refresh(root, days, **kw)
+    except ValueError as exc:
+        print(f"Refresh rejected: {exc}")
+        return 1
     root = Path(root)
     sys.path.insert(0, str(root / "portfolio_ui"))
     from renderer import render, validate_publication_snapshot
