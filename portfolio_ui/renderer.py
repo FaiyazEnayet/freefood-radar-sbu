@@ -185,6 +185,13 @@ def enrich(d,soup,root,mode='production'):
    c['brief']='SB Engaged public calendar / food predictions'
    c['limits']=['Public calendar coverage only; private events and withheld locations are unavailable.', 'Event facts come from SB Engaged; food probabilities are model estimates and food availability is unverified.', 'Historical classifier evaluation does not establish accuracy or calibration on the live public feed.', 'The HTML is a dated offline snapshot. Refresh occurs through the supplied daily workflow or manual refresh script, not in the browser.', 'On refresh failure the last successful public snapshot is retained with an explicit error status. No demonstration events replace real source data.']
    c['sources']+=['data/sbengaged-events.json','data/sbengaged-status.json','src/radar/scrapers/sbengaged.py','src/radar/live.py']
+   # P14: the operational artifact carries no dormant demo payload. The
+   # seeded demonstration file is not a source of the production view, so
+   # it leaves the sources list (and therefore the provenance hashes), and
+   # the demo-only descriptive fields leave the design payload. Demo mode
+   # is untouched: it still lists and renders the seeded demonstration.
+   c['sources']=[s for s in c['sources'] if s!='data/seed_events.json']
+   c.pop('north',None);c.pop('layout',None)
    d['figures']=_production_figures(d['figures'])
  if repo=='sukuklab':
   anchor=datetime.date(2026,1,15);dates=[datetime.date(2026+i//2,(7 if i%2==0 else 1),15) for i in range(10)]
