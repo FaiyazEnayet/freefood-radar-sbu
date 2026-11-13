@@ -3,6 +3,37 @@
 ## Unreleased
 
 ### Added
+- P14: the refresh pipeline is now profiled and the model fit is cached
+  (`src/radar/live.py`, `scripts/benchmark_pipeline.py`,
+  `portfolio_ui/renderer.py`):
+  - `scripts/benchmark_pipeline.py` profiles each stage on a controlled
+    local copy of the real published snapshot (964 events, schema
+    version 2) and reports wall time, peak memory and artifact bytes
+    from the measured run only; the network fetch stage is opt-in and
+    otherwise reported as not measured. Measured on the benchmark run:
+    live fetch 4.67 s (8,942,381 bytes), snapshot load 0.02 s,
+    classifier training 0.08 s, scoring 0.47 s, serialization 0.05 s,
+    rendering 0.32 s (6,357,199 bytes); process peak RSS 279.7 MB. No
+    speedup is claimed.
+  - The fitted model is cached under `.cache/freefood-radar/model`,
+    keyed on the recipe hash, the labeled file hash, and the sklearn and
+    Python versions, with a manifest and artifact hash plus a probe
+    verification before reuse. A data or version change is a cache miss
+    and a corrupt artifact or manifest is never used; the refresh refits
+    and repairs the cache. Cached and fresh scores are identical to
+    1e-12.
+  - Production HTML no longer carries the dormant demo payload: the
+    seeded demonstration file leaves the sources list and provenance
+    hashes and the demo-only descriptive fields leave the design payload
+    (6,357,625 to 6,357,199 bytes). Demo mode is unchanged.
+  - New tests (`test_stage3_freefood_radar_14`, 11 cases) pin identical
+    cached scores, cache misses on data and config change, no cache use
+    after corruption, the benchmark report shape, the demo-free
+    production payload, and a refresh that reuses the cache. Full suite:
+    174 tests passing.
+  - `joblib` is now a declared dependency (`requirements.txt`,
+    `pyproject.toml`); it was already imported directly.
+
 - P11: refresh output and dashboard consumers now share a version 2
   contract for snapshots, status, diagnostics, model provenance, lineage,
   and event records (`src/radar/schema.py`, `src/radar/live.py`,

@@ -7,6 +7,7 @@ import inspect
 import json
 from pathlib import Path
 import os
+import sys
 
 from .scrapers.sbengaged import FEED_URL, LISTING_URL, fetch_calendar, parse_calendar
 from .schema import SCHEMA_VERSION, validate_snapshot, validate_status
@@ -42,6 +43,125 @@ def model_config_hash(config=MODEL_CONFIG) -> str:
     return _canonical_hash(config)
 
 
+# The fitted model is immutable work: it depends only on the frozen
+# recipe (MODEL_CONFIG), the labeled training file, and the library
+# versions that fit it. A disk cache keyed on exactly those inputs lets
+# a refresh reuse the fit instead of refitting, but only after the
+# manifest and the artifact prove they still describe the current inputs.
+# Any mismatch, corruption, or failed verification is a cache miss, and
+# the refresh refits from scratch. The cache lives under .cache, which
+# the repo gitignores, so it never ships or pollutes a checkout.
+MODEL_CACHE_SUBDIR = Path(".cache") / "freefood-radar" / "model"
+MODEL_CACHE_ARTIFACT = "model.joblib"
+MODEL_CACHE_MANIFEST = "manifest.json"
+# Fixed probe texts for cache verification: a cached model must return
+# finite probabilities in [0, 1] for both before it is trusted.
+MODEL_CACHE_PROBE_TEXTS = (
+    "Free pizza at the club meeting, all welcome.",
+    "Midterm review session in the library, bring your notes.",
+)
+
+
+def model_cache_dir(root: Path, cache_dir=None) -> Path:
+    """Directory holding the cached fitted model and its manifest."""
+    if cache_dir is not None:
+        return Path(cache_dir)
+    return Path(root) / MODEL_CACHE_SUBDIR
+
+
+def _labeled_path(root: Path) -> Path:
+    return Path(root) / "data/labeled.csv"
+
+
+def model_cache_manifest(root: Path, config=MODEL_CONFIG, cache_dir=None) -> dict:
+    """The manifest a cached model must match to be reused.
+
+    Names the exact inputs the fit depends on: the recipe hash, the
+    labeled file hash and row count, and the sklearn and Python versions
+    that produced the fitted artifact. A stored manifest that differs in
+    any field is a cache miss by construction.
+    """
+    import sklearn
+    path = _labeled_path(root)
+    labeled_sha = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+    return dict(config_sha256=model_config_hash(config),
+                labeled_sha256=labeled_sha,
+                sklearn_version=sklearn.__version__,
+                python_version="%d.%d.%d" % sys.version_info[:3])
+
+
+def _verify_cached_model(model, manifest: dict) -> bool:
+    """Check a loaded cached model still scores before it is trusted.
+
+    The manifest match is checked by the caller; this checks the artifact
+    itself: it must be a fitted classifier that returns finite
+    probabilities in [0, 1] for the fixed probe texts. Any failure means
+    the cache is not used.
+    """
+    try:
+        import numpy as np
+        proba = model.predict_proba(list(MODEL_CACHE_PROBE_TEXTS))
+        proba = np.asarray(proba, dtype=float)
+        if proba.shape != (len(MODEL_CACHE_PROBE_TEXTS), 2):
+            return False
+        return bool(np.isfinite(proba).all() and (proba >= 0).all() and (proba <= 1).all())
+    except Exception:
+        return False
+
+
+def load_cached_model(root: Path, config=MODEL_CONFIG, cache_dir=None):
+    """Return the cached fitted model, or None on any miss or bad cache.
+
+    A miss covers: no cache files, a manifest that does not match the
+    current inputs, an artifact whose hash does not match the manifest,
+    an unloadable artifact, or a failed probe verification. Callers refit
+    on None and never score with a model this function rejected.
+    """
+    import joblib
+    directory = model_cache_dir(root, cache_dir)
+    manifest_path = directory / MODEL_CACHE_MANIFEST
+    artifact_path = directory / MODEL_CACHE_ARTIFACT
+    try:
+        stored = json.loads(manifest_path.read_text(encoding="utf8"))
+    except (OSError, ValueError):
+        return None
+    expected = model_cache_manifest(root, config, cache_dir)
+    for field in ("config_sha256", "labeled_sha256", "sklearn_version", "python_version"):
+        if stored.get(field) != expected.get(field):
+            return None
+    if not stored.get("artifact_sha256") or not artifact_path.exists():
+        return None
+    if hashlib.sha256(artifact_path.read_bytes()).hexdigest() != stored["artifact_sha256"]:
+        return None
+    try:
+        model = joblib.load(artifact_path)
+    except Exception:
+        return None
+    if not _verify_cached_model(model, stored):
+        return None
+    return model
+
+
+def save_cached_model(root: Path, model, config=MODEL_CONFIG, cache_dir=None) -> dict:
+    """Store a fitted model with its manifest, atomically.
+
+    The artifact is written first, then the manifest naming its hash, so
+    a manifest never points at an artifact that was not fully written.
+    Returns the stored manifest.
+    """
+    import joblib
+    directory = model_cache_dir(root, cache_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    artifact_path = directory / MODEL_CACHE_ARTIFACT
+    temp = artifact_path.with_suffix(".joblib.tmp")
+    joblib.dump(model, temp)
+    os.replace(temp, artifact_path)
+    manifest = model_cache_manifest(root, config, cache_dir)
+    manifest["artifact_sha256"] = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+    atomic_json(directory / MODEL_CACHE_MANIFEST, manifest)
+    return manifest
+
+
 def _model_hash(model: dict) -> str:
     """Hash naming the model behind a snapshot.
 
@@ -68,25 +188,39 @@ def atomic_json(path: Path, value):
     os.replace(temp, path)
 
 
-def score_snapshot(events: list[dict], root: Path) -> dict:
+def score_snapshot(events: list[dict], root: Path, use_cache: bool = True,
+                   config=None, cache_dir=None) -> dict:
     """Refit the existing model recipe on its original seed-7 training split.
 
     No old model artifact is shipped in the repo. Do not overwrite historical
     metrics.json or claim its held-out accuracy measures these live texts.
+
+    The fit is immutable work (frozen recipe plus labeled file plus library
+    versions), so with use_cache it is reused from the model cache when the
+    manifest and the artifact verify against the current inputs; any miss
+    or failed verification refits from scratch and repairs the cache. The
+    scores are identical either way: the cache only skips the refit.
     """
     import sklearn
     from sklearn.model_selection import train_test_split
     from .classifier import build_pipeline, load_labeled
     from .models import Event
     from .digest import score_events
+    config = config if config is not None else MODEL_CONFIG
     path = root / "data/labeled.csv"
     labeled = load_labeled(str(path))
-    split = MODEL_CONFIG["training_split"]
+    split = config["training_split"]
     texts, _, labels, _ = train_test_split(labeled.text.tolist(), labeled.label.tolist(),
                                            test_size=split["test_size"], random_state=split["seed"],
                                            stratify=labeled.label.tolist())
-    model = build_pipeline()
-    model.fit(texts, labels)
+    model = None
+    if use_cache:
+        model = load_cached_model(root, config=config, cache_dir=cache_dir)
+    if model is None:
+        model = build_pipeline()
+        model.fit(texts, labels)
+        if use_cache:
+            save_cached_model(root, model, config=config, cache_dir=cache_dir)
     scored = score_events([Event.from_dict(e) for e in events], model)
     for row, prediction in zip(events, scored):
         row.update(food_probability=prediction.food_probability, score=prediction.score,
@@ -99,7 +233,7 @@ def score_snapshot(events: list[dict], root: Path) -> dict:
     return dict(recipe="Repository TF-IDF + logistic regression + sigmoid calibration, cv=3",
                 seed=split["seed"], training_rows=len(texts), labeled_rows=len(labeled),
                 labeled_sha256=hashlib.sha256(path.read_bytes()).hexdigest(), sklearn_version=sklearn.__version__,
-                config=MODEL_CONFIG, config_sha256=model_config_hash(),
+                config=config, config_sha256=model_config_hash(config),
                 validation="Historical labeled-text evaluation is not validated live-feed precision/recall",
                 estimate_notice="Snapshot scores are unverified model estimates (classifier signal combined with deterministic text evidence), not confirmed free-food listings")
 
