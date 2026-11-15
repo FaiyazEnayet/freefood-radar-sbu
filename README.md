@@ -32,16 +32,18 @@ Each recommendation puts the essentials side by side: predicted food relevance, 
 
 ## Method
 
-The public ICS calendar is filtered to events that have not ended in a rolling 14-day window. UID, modification and cancellation handling produce a dated source snapshot. The TF-IDF/logistic classifier supplies the probabilities, and transparent food-quality weights turn them into a clear, inspectable ranking.
+The public ICS calendar is filtered to events that have not ended in a rolling 14-day window. UID, modification and cancellation handling produce a dated source snapshot. The TF-IDF/logistic classifier supplies the probabilities, and transparent food-quality weights turn them into a clear, inspectable heuristic ranking score.
 
 ## Evidence at a glance
 
-| Scope | Recorded result or contract |
-| :--- | :--- |
-| Source | Official public SB Engaged calendar; no login required |
-| Refresh | Daily workflow at 11:17 UTC, plus manual refresh |
-| Historical labeled-text test | 40 examples; precision 89.5%; recall 85.0% |
-| Live-feed validation | Food-availability precision and calibration on live outcomes are the next measurements to record |
+| Scope | Recorded result or contract | Provenance |
+| :--- | :--- | :--- |
+| Source | Official public SB Engaged calendar; no login required | Observed |
+| Refresh | Daily workflow at 11:17 UTC, plus manual refresh | Observed |
+| Historical labeled-text test | 40 examples; precision 89.5%; recall 85.0% | Observed |
+| Live-feed validation | Food-availability precision and calibration on live outcomes are the next measurements to record | Unverified |
+
+Every claim above carries its provenance class. The full record, with the error taxonomy and validation record, is in [docs/EVIDENCE.md](docs/EVIDENCE.md).
 
 ## Updating this project
 
@@ -76,7 +78,7 @@ The labeled-text test measures the classifier on held-out text, and its precisio
 
 ![Current public feed model rankings](docs/results.png?v=feed-20261029)
 
-The chart shows how the model ranks the current public feed. Model probability and food-quality weight drive that order, and each entry carries its source freshness and organizer link, so a strong candidate is easy to check and act on.
+The chart shows how the model ranks the current public feed. Model probability and food-quality weight drive that order as a heuristic ranking score, and each entry carries its source freshness and organizer link, so a strong candidate is easy to check and act on.
 
 ## Code and data
 

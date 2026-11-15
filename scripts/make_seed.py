@@ -1,9 +1,10 @@
 """Generate data/seed_events.json: realistic SBU event candidates.
 
-These stand in for live scraper output in the demo. Each entry mirrors
-what the scrapers produce (title, description, club, location, time,
-source). Roughly half mention free food; the rest are tricky negatives
-so the classifier has real work to do in the dashboard.
+Offline only: these stand in for live feed output in the demo. The
+file is a fixed fixture; the demo never fetches a live feed. Each
+entry mirrors what the scrapers produce (title, description, club,
+location, time, source). Roughly half mention free food; the rest are
+tricky negatives so the classifier has real work to do in the dashboard.
 """
 
 import json

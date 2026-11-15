@@ -1,5 +1,8 @@
 """End-to-end demo pipeline: seed events -> classify -> rank -> digest.
 
+Offline only: the input is the fixed fixture data/seed_events.json,
+never a live feed.
+
 Run: PYTHONPATH=src .venv/bin/python scripts/build_digest.py
 Writes digest.md and prints the ranked list.
 """
@@ -36,8 +39,8 @@ def main():
     print(f"{len(events)} candidates -> {len(ranked)} likely free-food events\n")
     for i, e in enumerate(ranked[:12], 1):
         when = e.starts_at.strftime("%a %I:%M %p") if e.starts_at else "TBA"
-        print(f"{i:2d}. [{e.food_probability:5.1%} | EV {e.score:4.2f}] "
-              f"{e.title} — {e.club} @ {e.location} ({when})")
+        print(f"{i:2d}. [{e.food_probability:5.1%} | ranking score {e.score:4.2f}] "
+              f"{e.title} - {e.club} @ {e.location} ({when})")
 
     favs = watchlist_mod.load_favorites()
     alerts = watchlist_mod.check(ranked, favs)

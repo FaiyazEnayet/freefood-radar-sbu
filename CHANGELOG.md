@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+### Fixed
+- P15: public claims now carry evidence provenance
+  (`README.md`, `SBENGAGED-INTEGRATION.md`, `docs/EVIDENCE.md`,
+  `pyproject.toml`, `src/radar/classifier.py`,
+  `src/radar/digest.py`, `src/radar/features.py`, `APPLY.md`,
+  `digest.md`):
+  - New `docs/EVIDENCE.md` classifies every public
+    classifier/evaluation claim as observed, constructed, inferred
+    or unverified, with 0 metrics missing a provenance class, and
+    records the error taxonomy, the validation record, and how the
+    snapshot, status, dashboard, and demo artifacts relate.
+  - The unproven "0.8 means food four times out of five" claim is
+    removed from the classifier docstring, which now distinguishes
+    the calibrated algorithm (sigmoid scaling fitted on the
+    labeled-text training split) from observed feed calibration,
+    which is unmeasured.
+  - The ranking score is now named a heuristic ranking score
+    everywhere it is shown (`features.heuristic_ranking_score`,
+    with the earlier name kept as a compatibility alias), since its
+    utility has not been empirically verified.
+  - `pyproject.toml` no longer describes production multi-source
+    scraping: the production source is the single public SB Engaged
+    ICS feed.
+  - Seeded demo scripts (`scripts/make_seed.py`,
+    `scripts/build_digest.py`, `scripts/make_demo_gif.py`,
+    `scripts/make_dashboard.py` demo path) are marked offline only,
+    and the committed `digest.md` is regenerated from the fixed
+    fixture `data/seed_events.json` (10 ranked events from the same
+    fixture the previous 28-event digest was built from).
+  - New tests (`test_stage3_freefood_radar_15`, 9 cases) pin the
+    removed frequency claim, the heuristic ranking score label and
+    known-answer value, the evidence-record coverage, the
+    offline-only demo marking, and the digest regeneration from its
+    fixed fixture.
+
 ### Added
 - P14: the refresh pipeline is now profiled and the model fit is cached
   (`src/radar/live.py`, `scripts/benchmark_pipeline.py`,

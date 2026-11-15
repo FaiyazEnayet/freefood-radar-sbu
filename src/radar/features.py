@@ -1,12 +1,16 @@
-"""Food-quality signals for expected-value ranking.
+"""Food-quality signals for heuristic ranking.
 
-expected_value = P(free food) x quality_score
+heuristic_ranking_score = P(free food) x quality_score
 
 quality_score blends: how good the food sounds (cuisine keywords) and
 how much of it there is (meal vs snack words). All weights are
 transparent and tunable in one place. Scarcity and RSVP phrases are
 NOT quality signals: they are access caveats, handled by the evidence
 layer below and reported as neutral flags, never as extra value.
+
+The score is a heuristic ranking score, not a measured expected
+value: its utility has not been empirically verified, so it orders
+candidates for review and never states what an event is worth.
 
 The evidence layer (analyze_evidence) reads the same text separately
 from the quality score. It answers a different question than the
@@ -101,10 +105,15 @@ def free_food_keywords(text: str) -> list[str]:
     return sorted({m.group(0) for m in FREE_RE.finditer(t)})
 
 
-def expected_value(probability: float, text: str) -> tuple[float, float, list[str]]:
-    """Return (expected_value, quality, keywords)."""
+def heuristic_ranking_score(probability: float, text: str) -> tuple[float, float, list[str]]:
+    """Return (heuristic_ranking_score, quality, keywords)."""
     q, kw = quality_score(text)
     return probability * q, q, kw
+
+
+# Compatibility alias: the earlier name survives for existing callers.
+# The public label is heuristic ranking score (see docs/EVIDENCE.md).
+expected_value = heuristic_ranking_score
 
 
 # ---------------------------------------------------------------------------

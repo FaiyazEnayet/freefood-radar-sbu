@@ -1,8 +1,14 @@
 """Free-food text classifier.
 
 Pipeline: TF-IDF (word 1-2 grams) -> LogisticRegression -> Platt
-scaling (CalibratedClassifierCV, sigmoid) so the output probabilities
-are actually calibrated: a 0.8 should mean food four times out of five.
+scaling (CalibratedClassifierCV, sigmoid). The scaling step fits
+probabilities on the labeled-text training split, so the classifier
+is a calibrated algorithm in that narrow sense: on held-out labeled
+text the predicted probabilities track the observed rate (see the
+calibration curve in docs/EVIDENCE.md). That does not establish
+calibration on live feed text. Live-feed calibration is unmeasured:
+no live food outcomes have been recorded yet, so a score of 0.8 is a
+model estimate, not a measured four-in-five rate.
 
 Trained on data/labeled.csv (hand-labeled SBU-style event blurbs).
 

@@ -49,7 +49,7 @@ def check(events: list[Event], favorites: list[str],
                                f"confidence {ev.food_probability:.0%})",
                     )
                 )
-    # Best match per (food, event) first, then by expected value.
+    # Best match per (food, event) first, then by heuristic ranking score.
     alerts.sort(key=lambda a: a.event.score, reverse=True)
     return alerts
 

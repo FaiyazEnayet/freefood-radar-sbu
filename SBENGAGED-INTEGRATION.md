@@ -106,10 +106,24 @@ model outputs, not verified food offers. Historical labeled-text precision,
 recall and calibration do not establish accuracy on actual SB Engaged text.
 Training dependency versions are recorded; they can affect the rebuilt model.
 
-The top-level original seeded digest remains an offline demo. The new public
-dashboard uses its own public-source snapshot and never calls it a live stream.
+The top-level original seeded digest remains an offline-only demo
+generated from the fixed fixture data/seed_events.json; it never
+stands in for the live snapshot. The new public dashboard uses its
+own public-source snapshot and never calls it a live stream.
 Upcoming work: human-reviewed real-feed labels, time-split validation, cancelled
 event monitoring, and source freshness alerts.
+
+Calibrated algorithm, unmeasured feed calibration: the classifier
+applies sigmoid (Platt) scaling fitted on the labeled-text training
+split, and the calibration curve in the dashboard shows predicted
+probability against observed rate on held-out labeled text only.
+That does not establish calibration on feed text, where no food
+outcomes have been recorded yet. A score of 0.8 is a model estimate,
+not a measured four-in-five rate. The ranking score is a heuristic
+ranking score (offer likelihood times food-quality weight); its
+utility has not been empirically verified. The full claim record,
+with the error taxonomy and validation record, is in
+docs/EVIDENCE.md.
 
 ## Authentication
 
@@ -164,6 +178,12 @@ time, source-body hash, window, count classification and diagnostics.
 newest snapshot that passed validation. A suspect or failed result is
 recorded in the status file only; it replaces the snapshot solely after a
 second identical observation confirms it, a verified-empty feed excepted.
+
+Generation relationships: `scripts/refresh_sbengaged.py` fetches the
+public feed and writes the snapshot and status; `portfolio_ui/renderer.py`
+renders `docs/dashboard.html` from those two files;
+`scripts/build_digest.py` writes the offline demo `digest.md` from the
+fixed fixture only. See docs/EVIDENCE.md for the full artifact map.
 
 ### Source schema changes
 
