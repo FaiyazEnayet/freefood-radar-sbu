@@ -1,4 +1,4 @@
-"""Daily digest: score events, rank by expected value, render markdown."""
+"""Daily digest: score events, rank by heuristic ranking score, render markdown."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def score_events(events: list[Event], model) -> list[Event]:
-    """Attach offer likelihood, evidence, keywords, and expected-value score.
+    """Attach offer likelihood, evidence, keywords, and heuristic ranking score.
 
     The ranking probability is the likelihood of a complimentary offer:
     the classifier probability combined with the deterministic evidence
@@ -33,7 +33,7 @@ def score_events(events: list[Event], model) -> list[Event]:
         ev.access_caveats = list(assessment.caveats)
         ev.eligibility = assessment.eligibility
         ev.evidence_status = assessment.status
-        ev_value, quality, kw = features.expected_value(likelihood, ev.text())
+        ev_value, quality, kw = features.heuristic_ranking_score(likelihood, ev.text())
         ev.score = float(ev_value)
         ev.food_keywords = kw + features.free_food_keywords(ev.text())
         ev.food_keywords = sorted(set(ev.food_keywords))
@@ -41,7 +41,7 @@ def score_events(events: list[Event], model) -> list[Event]:
 
 
 def rank(events: list[Event], min_prob: float = 0.5) -> list[Event]:
-    """Keep likely free-food events, ranked by expected value.
+    """Keep likely free-food events, ranked by heuristic ranking score.
 
     Events whose evidence conflicts (status "uncertain") abstain: they
     are held out of the ranking for review instead of being guessed at.
@@ -54,10 +54,10 @@ def rank(events: list[Event], min_prob: float = 0.5) -> list[Event]:
 def render_digest(events: list[Event], day: date | None = None) -> str:
     day = day or date.today()
     lines = [
-        f"# Free Food Radar — {day.strftime('%A, %B %d, %Y')}",
+        f"# Free Food Radar - {day.strftime('%A, %B %d, %Y')}",
         "",
-        f"{len(events)} likely free-food events, ranked by expected value "
-        "(classifier confidence x food quality).",
+        f"{len(events)} likely free-food events, ranked by heuristic ranking score "
+        "(offer likelihood x food quality weight).",
         "",
     ]
     for i, e in enumerate(events, 1):
@@ -72,7 +72,7 @@ def render_digest(events: list[Event], day: date | None = None) -> str:
         lines += [
             f"## {i}. {e.title}",
             f"**{e.club}** · {where} · {when} · "
-            f"offer likelihood {e.food_probability:.0%} · expected value {e.score:.2f}"
+            f"offer likelihood {e.food_probability:.0%} · ranking score {e.score:.2f}"
             f"{caveats}",
             "",
             f"{e.description[:280]}",
@@ -80,9 +80,9 @@ def render_digest(events: list[Event], day: date | None = None) -> str:
             f"_Signals: {kw}_",
             "",
         ]
-    lines.append("_Scores are unverified model estimates (classifier signal "
-                 "combined with text evidence), not confirmed listings; see "
-                 "the dashboard for precision/recall._")
+    lines.append("_Scores are unverified model estimates (heuristic ranking "
+                 "scores from classifier signal combined with text evidence), "
+                 "not confirmed listings; see the dashboard for precision/recall._")
     return "\n".join(lines)
 
 

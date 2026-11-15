@@ -1,8 +1,9 @@
 """Render docs/demo.gif: an animated tour of the Free Food Radar dashboard.
 
-Matplotlib animation (no browser needed): ranked digest bars, a campus
-map scatter, the calibration curve, and the day x time heatmap — the
-same real numbers as the Plotly dashboard.
+Offline only: the tour renders the fixed seeded fixture, never a live
+feed. Matplotlib animation (no browser needed): ranked digest bars, a
+campus map scatter, the calibration curve, and the day x time heatmap,
+the same numbers as the offline demo dashboard.
 
 Run: PYTHONPATH=src .venv/bin/python scripts/make_demo_gif.py
 """
@@ -88,7 +89,7 @@ def main():
 
     plt.style.use("dark_background")
     fig, axes = plt.subplots(2, 2, figsize=(9.6, 6.4))
-    fig.suptitle("Free Food Radar — Stony Brook  |  live dashboard tour",
+    fig.suptitle("Free Food Radar - Stony Brook  |  offline demo tour",
                  fontsize=14, fontweight="bold", y=0.98)
     fig.tight_layout(rect=[0, 0, 1, 0.94], pad=2.0)
     fig.subplots_adjust(left=0.14)
@@ -107,13 +108,13 @@ def main():
         # Ranked digest (always drawn, grows).
         n = min(len(top), 2 + step // 2)
         ax_rank.barh(titles[:n][::-1], evs[:n][::-1], color="#f0a832", alpha=alpha)
-        ax_rank.set_title("Ranked digest — expected value", fontsize=11)
-        ax_rank.set_xlabel("EV = confidence x quality")
+        ax_rank.set_title("Ranked digest - heuristic ranking score", fontsize=11)
+        ax_rank.set_xlabel("ranking score = offer likelihood x quality")
 
         # Map pins (fade in).
         sc = ax_map.scatter(lons, lats, s=np.array(sizes) * alpha, c="#3fb950",
                             alpha=0.75 * alpha, edgecolors="white", linewidths=0.5)
-        ax_map.set_title("Campus map — today's pins", fontsize=11)
+        ax_map.set_title("Campus map - today's pins", fontsize=11)
         ax_map.set_xlabel("lon")
         ax_map.tick_params(labelsize=7)
 
@@ -121,7 +122,7 @@ def main():
         k = min(len(bx), 2 + step // 2)
         ax_cal.plot([0, 1], [0, 1], "--", color="gray", lw=1)
         ax_cal.plot(bx[:k], by[:k], "o-", color="#f0a832", ms=6)
-        ax_cal.set_title("Calibration — predicted vs observed", fontsize=11)
+        ax_cal.set_title("Calibration - predicted vs observed", fontsize=11)
         ax_cal.set_xlim(0, 1)
         ax_cal.set_ylim(0, 1)
 

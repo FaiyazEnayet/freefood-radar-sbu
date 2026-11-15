@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "freefood-radar"
 version = "1.0.0"
-description = "Free-food finder for Stony Brook students: scrape campus event sources, score free-food mentions with NLP, publish a ranked daily digest."
+description = "Free-food finder for Stony Brook students: read the public SB Engaged calendar, score free-food mentions with NLP, publish a ranked snapshot."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"

@@ -94,7 +94,7 @@ def map_figure(ranked: list[Event], places: dict) -> go.Figure:
             "lat": coords[0] + np.random.RandomState(hash(e.title) % 2**16).uniform(-0.0006, 0.0006),
             "lon": coords[1] + np.random.RandomState(hash(e.title) % 2**16 + 1).uniform(-0.0006, 0.0006),
             "label": f"<b>{e.title}</b><br>{e.club}<br>{e.location} · {when}<br>"
-                     f"confidence {e.food_probability:.0%} · EV {e.score:.2f}",
+                     f"confidence {e.food_probability:.0%} · ranking score {e.score:.2f}",
             "prob": e.food_probability,
             "title": e.title,
         })
@@ -123,12 +123,12 @@ def ranked_table(ranked: list[Event]) -> go.Figure:
                      f"{e.food_probability:.0%}", f"{e.score:.2f}",
                      ", ".join(e.food_keywords[:3])])
     fig = go.Figure(data=[go.Table(
-        header=dict(values=["#", "Event", "Club", "Where", "When", "Confidence", "EV", "Signals"],
+        header=dict(values=["#", "Event", "Club", "Where", "When", "Confidence", "Ranking score", "Signals"],
                     fill_color="#1f6feb", font=dict(color="white", size=12), align="left"),
         cells=dict(values=list(zip(*rows)) if rows else [[]] * 8,
                    fill_color=CARD, font=dict(color=TEXT, size=11), align="left"),
     )])
-    fig.update_layout(title="Ranked digest — expected value = confidence x food quality",
+    fig.update_layout(title="Ranked digest - heuristic ranking score = offer likelihood x food quality",
                       paper_bgcolor=BG, font_color=TEXT, height=520,
                       margin=dict(l=0, r=0, t=40, b=0))
     return fig
@@ -255,9 +255,9 @@ def _build_demo(root, out):
     parts = [
         f"<h1 style='color:{TEXT}'>Free Food Radar <span style='font-size:18px;color:#8b949e'>"
         f"Stony Brook University</span></h1>",
-        f"<p style='color:#8b949e'>Scraped {s['n_events']} campus events, "
-        f"scored every blurb with a calibrated NLP classifier, ranked by expected value. "
-        f"Week of Oct 12-18, 2026.</p>",
+        f"<p style='color:#8b949e'>Offline demo: {s['n_events']} seeded events from the fixed fixture, "
+        f"scored with a sigmoid-scaled NLP classifier, ranked by heuristic ranking score. "
+        f"Week of Oct 12-18, 2026. Calibration on feed text is unmeasured.</p>",
         kpi_cards(s),
         "<h2 style='color:" + TEXT + "'>Today's map</h2>",
         map_figure(ranked, places).to_html(full_html=False, include_plotlyjs=True),
