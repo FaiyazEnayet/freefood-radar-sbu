@@ -180,6 +180,57 @@ def test_stage3_freefood_radar_13_empty_feed_suspect_then_confirmed(tmp_path):
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
+def test_d3_first_run_empty_feed_is_status_only_then_confirmed(tmp_path):
+    """D3: an empty feed on the first run publishes nothing until confirmed.
+
+    First sight is empty_suspect with a failed status and a status-only
+    dashboard; a repeated identical observation confirms it, the empty
+    snapshot publishes, and the validator accepts both states."""
+    root = make_root(tmp_path)
+    empty = lambda: (fixture("sbengaged_empty.ics"), {})
+    assert run_refresh(root, 14, fetcher=empty, scorer=stub_scorer, now=NOW) == 1
+    assert not (root / "data/sbengaged-events.json").exists()
+    first = status_of(root)
+    assert first["count_change"] == "empty_suspect"
+    assert first["pending_count_change"]["state"] == "empty_suspect"
+    assert first["state"] == "failed"
+    html, d = rendered(root)
+    assert d.get("no_snapshot") is True
+    assert "sbengaged" not in d
+    assert d["sbengaged_status"]["success"] is False
+    proc = run_validator(root, tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert run_refresh(root, 14, fetcher=empty, scorer=stub_scorer, now=NOW) == 0
+    snapshot = snapshot_of(root)
+    assert snapshot["events"] == []
+    assert snapshot["diagnostics"]["count_change"] == "empty_confirmed"
+    assert status_of(root)["count_change"] == "empty_confirmed"
+    html, d = rendered(root)
+    assert d["sbengaged"]["events"] == []
+    assert d["sbengaged"]["fetched_at"] == snapshot["fetched_at"]
+    proc = run_validator(root, tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_d3_first_run_verified_empty_feed_publishes(tmp_path):
+    """D3: a proven empty feed on the first run publishes at once.
+
+    Every event is demonstrably cancelled or out of window, so the empty
+    snapshot is a verified result, and JSON and rendered provenance agree."""
+    root = make_root(tmp_path)
+    verified = lambda: (fixture("sbengaged_verified_empty.ics"), {})
+    assert run_refresh(root, 14, fetcher=verified, scorer=stub_scorer, now=NOW) == 0
+    snapshot = snapshot_of(root)
+    assert snapshot["events"] == []
+    assert snapshot["diagnostics"]["count_change"] == "verified_empty"
+    assert status_of(root)["count_change"] == "verified_empty"
+    html, d = rendered(root)
+    assert d["sbengaged"]["events"] == []
+    assert d["sbengaged"]["fetched_at"] == snapshot["fetched_at"]
+    proc = run_validator(root, tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
 def test_stage3_freefood_radar_13_malformed_ics_keeps_snapshot(tmp_path):
     """Injected case 3/5: malformed ICS. The fetch fails closed, the prior
     snapshot is kept byte-identical, the typed state names the failure,

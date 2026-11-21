@@ -274,6 +274,24 @@ def test_count_change_without_proof_fails_closed():
     assert state == "zero_unverified_suspect" and suspect is True
 
 
+def test_first_run_zero_events_use_the_same_proof_rule():
+    """D3: with no previous snapshot, a zero is still judged on its proof.
+
+    A bare feed is a suspicion, a mixed zero is unverified, and only a
+    zero whose events are all accounted for is verified empty. A feed
+    with events is still the initial result.
+    """
+    _, empty_stats = parse_calendar((FIXTURES / "sbengaged_empty.ics").read_bytes(), NOW)
+    assert _count_change(None, empty_stats) == ("empty_suspect", True)
+    _, verified_stats = parse_calendar(
+        (FIXTURES / "sbengaged_verified_empty.ics").read_bytes(), NOW)
+    assert _count_change(None, verified_stats) == ("verified_empty", False)
+    _, mixed_stats = parse_calendar(mixed_zero_feed(), NOW)
+    assert _count_change(None, mixed_stats) == ("zero_unverified_suspect", True)
+    _, full_stats = parse_calendar((FIXTURES / "sbengaged_full.ics").read_bytes(), NOW)
+    assert _count_change(None, full_stats) == ("initial", False)
+
+
 def seed_snapshot(tmp_path):
     assert refresh(tmp_path, now=NOW,
                    fetcher=lambda: ((FIXTURES / "sbengaged_full.ics").read_bytes(), {}),

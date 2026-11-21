@@ -275,11 +275,12 @@ def _count_change(previous_count, diagnostics) -> tuple[str, bool]:
 
     Returns (state, suspect). A suspect state (empty_suspect,
     severe_shrink_suspect, zero_unverified_suspect) must not replace the
-    snapshot until a second, identical observation confirms it.
+    snapshot until a second, identical observation confirms it. A zero
+    follows the same proof rule on the first run, when there is no
+    previous snapshot: an unproven zero is held, never published as an
+    initial result.
     """
     new = diagnostics["selected_events"]
-    if previous_count is None:
-        return "initial", False
     if new == 0:
         # Zero selected events is a verified zero ONLY when every newest
         # UID is demonstrably cancelled or out of window and no record was
@@ -302,6 +303,8 @@ def _count_change(previous_count, diagnostics) -> tuple[str, bool]:
                 and cancelled + out_of_window == unique):
             return "verified_empty", False
         return "zero_unverified_suspect", True
+    if previous_count is None:
+        return "initial", False
     if previous_count >= SHRINK_MIN_PREVIOUS and new < previous_count * SHRINK_RATIO:
         return "severe_shrink_suspect", True
     if new < previous_count:
@@ -415,12 +418,18 @@ def refresh(root: Path, days: int = 14, now=None, fetcher=fetch_calendar, scorer
                 state = state.replace("_suspect", "_confirmed")
                 status["pending_count_change"] = None
             else:
+                if previous_count is None:
+                    error = (f"Suspected source problem: {state} (no previous snapshot -> "
+                             f"{diagnostics['selected_events']} selected events); publishing "
+                             "nothing until a repeat observation confirms it")
+                else:
+                    error = (f"Suspected source problem: {state} ({previous_count} -> "
+                             f"{diagnostics['selected_events']} selected events); keeping the "
+                             "last good snapshot until a repeat observation confirms it")
                 status.update(
                     count_change=state, pending_count_change=pending,
                     state="stale" if previous is not None else "failed",
-                    error=(f"Suspected source problem: {state} ({previous_count} -> "
-                           f"{diagnostics['selected_events']} selected events); keeping the "
-                           "last good snapshot until a repeat observation confirms it"))
+                    error=error)
                 _write_status(status_path, status, previous_status)
                 return False
         model = scorer(events, root)
