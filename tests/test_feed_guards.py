@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from radar.live import refresh
-from radar.scrapers.sbengaged import parse_calendar
+from radar.scrapers.sbengaged import FeedError, parse_calendar
 
 NOW = datetime(2026, 10, 17, 12, tzinfo=timezone.utc)
 FIXTURES = Path(__file__).resolve().parent / 'fixtures'
@@ -116,3 +116,81 @@ def test_moderate_shrink_is_accepted_and_labelled(tmp_path):
     assert status['count_change'] == 'shrank'
     assert status['previous_selected_events'] == 30
     assert status['selected_events'] == 20
+
+
+# --- First run: a zero follows the same proof rule as later runs ---
+
+def test_first_run_empty_feed_publishes_nothing(tmp_path):
+    """D3: a bare feed on the first run is a suspicion, not an initial result.
+
+    No previous snapshot exists, so there is nothing to keep, but the empty
+    result is still unproven: nothing is published and the status names the
+    cause.
+    """
+    assert refresh(tmp_path, now=NOW, fetcher=lambda: (fixture('sbengaged_empty.ics'), {}),
+                   scorer=SCORER) is False
+    assert not (tmp_path / 'data/sbengaged-events.json').exists()
+    status = status_of(tmp_path)
+    assert status['success'] is False
+    assert status['state'] == 'failed'
+    assert status['count_change'] == 'empty_suspect'
+    assert status['pending_count_change']['state'] == 'empty_suspect'
+    assert status['previous_selected_events'] is None
+    assert status['selected_events'] == 0
+    assert 'no previous snapshot' in status['error']
+
+
+def test_first_run_repeated_empty_feed_confirms_and_publishes(tmp_path):
+    feed = lambda: (fixture('sbengaged_empty.ics'), {})
+    assert refresh(tmp_path, now=NOW, fetcher=feed, scorer=SCORER) is False
+    assert refresh(tmp_path, now=NOW, fetcher=feed, scorer=SCORER) is True
+    assert snapshot_of(tmp_path)['events'] == []
+    assert snapshot_of(tmp_path)['diagnostics']['count_change'] == 'empty_confirmed'
+    assert status_of(tmp_path)['count_change'] == 'empty_confirmed'
+    assert status_of(tmp_path)['state'] == 'fresh'
+
+
+def test_first_run_verified_empty_feed_publishes_immediately(tmp_path):
+    """D3: a proven zero is the distinguishable genuine-empty case.
+
+    Every event is demonstrably cancelled or out of window, so the empty
+    result is published at once and labelled verified_empty, not initial.
+    """
+    assert refresh(tmp_path, now=NOW,
+                   fetcher=lambda: (fixture('sbengaged_verified_empty.ics'), {}),
+                   scorer=SCORER) is True
+    assert snapshot_of(tmp_path)['events'] == []
+    status = status_of(tmp_path)
+    assert status['success'] is True
+    assert status['count_change'] == 'verified_empty'
+
+
+def test_first_run_zero_unverified_feed_publishes_nothing(tmp_path):
+    feed = lambda: (fixture('sbengaged_zero_unverified.ics'), {})
+    assert refresh(tmp_path, now=NOW, fetcher=feed, scorer=SCORER) is False
+    assert not (tmp_path / 'data/sbengaged-events.json').exists()
+    status = status_of(tmp_path)
+    assert status['state'] == 'failed'
+    assert status['count_change'] == 'zero_unverified_suspect'
+    assert status['pending_count_change']['state'] == 'zero_unverified_suspect'
+    assert refresh(tmp_path, now=NOW, fetcher=feed, scorer=SCORER) is True
+    assert snapshot_of(tmp_path)['events'] == []
+    assert status_of(tmp_path)['count_change'] == 'zero_unverified_confirmed'
+
+
+def test_first_run_fetch_failure_publishes_nothing(tmp_path):
+    """D3: a fetch that never arrives is the other half of the distinction.
+
+    The feed failure raises, so no snapshot is published and the status
+    records the failure instead of an empty result.
+    """
+    def fail():
+        raise FeedError("Calendar returned HTTP 503")
+
+    assert refresh(tmp_path, now=NOW, fetcher=fail, scorer=SCORER) is False
+    assert not (tmp_path / 'data/sbengaged-events.json').exists()
+    status = status_of(tmp_path)
+    assert status['success'] is False
+    assert status['state'] == 'failed'
+    assert '503' in status['error']
+    assert status['last_successful_fetch_at'] is None
