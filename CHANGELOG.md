@@ -38,6 +38,37 @@
     fixed fixture.
 
 ### Added
+- P13: production failure-injection and CI integration suite
+  (`tests/test_publication_integration.py`,
+  `scripts/validate_publication.py`, `src/radar/live.py`,
+  `scripts/refresh_sbengaged.py`, `.github/workflows/sbengaged.yml`,
+  `.github/workflows/ci.yml`):
+  - New `scripts/validate_publication.py`, a standalone command that
+    checks the snapshot contract, the status contract, the
+    snapshot/status lineage cross-check, and that the rendered
+    dashboard evidence names the same snapshot as the JSON files
+    (same fetch time, same event IDs, same file hashes, no seeded
+    records). A snapshot with missing source proof is rejected, and
+    a missing snapshot is accepted only with a failed status.
+  - The refresh workflow now calls the validator in the validation
+    step and again before git add, and commits only when validation
+    succeeded; CI runs the validator on the committed artifacts.
+  - A refresh that finds a malformed prior snapshot or status file
+    now fails with a typed message naming the record, and a renderer
+    failure now ends the run with exit 1 and a typed message instead
+    of an uncaught error, leaving the stale dashboard untouched for
+    the validator to reject.
+  - New tests (`test_stage3_freefood_radar_13`, 14 cases) run the
+    full pipeline in temporary directories with no network: missing
+    feed with zero prior snapshot and with a retained snapshot,
+    empty feed suspect then confirmed on repeat, malformed ICS,
+    malformed status and snapshot JSON, model failure, corrupt model
+    provenance, renderer failure mid-publish, the commit-step
+    decision, and validator rejection of intentionally missing
+    source proof. Every failure case shows 0 seeded data in public
+    output and the expected typed health state. Full suite: 197
+    tests passing.
+
 - P14: the refresh pipeline is now profiled and the model fit is cached
   (`src/radar/live.py`, `scripts/benchmark_pipeline.py`,
   `portfolio_ui/renderer.py`):

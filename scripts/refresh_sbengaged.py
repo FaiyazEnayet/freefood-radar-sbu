@@ -47,9 +47,13 @@ def run_refresh(root, days, fetcher=None, scorer=None, now=None):
             print("REJECTED publication artifact data/sbengaged-events.json: "
                   + "; ".join(problems))
             return 1
-    render(root, "freefood-radar",
-           root / "portfolio_ui/original-dashboard-snapshot.html",
-           root / "docs/dashboard.html", mode="production")
+    try:
+        render(root, "freefood-radar",
+               root / "portfolio_ui/original-dashboard-snapshot.html",
+               root / "docs/dashboard.html", mode="production")
+    except Exception as exc:
+        print(f"Render failed: {type(exc).__name__}: {exc}")
+        return 1
     if succeeded:
         print("SB Engaged snapshot refreshed")
     else:
