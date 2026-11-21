@@ -47,33 +47,11 @@ jobs:
         run: python scripts/refresh_sbengaged.py --days 14
       - name: Validate publication artifacts
         id: validate
-        run: |
-          python - <<'PYEOF'
-          import json, sys
-          from pathlib import Path
-          sys.path.insert(0, 'src')
-          from radar.schema import validate_snapshot, validate_status
-          p = Path('data/sbengaged-events.json')
-          if p.exists():
-              data = json.loads(p.read_text(encoding='utf8'))
-              problems = validate_snapshot(data)
-              if problems:
-                  print('REJECTED publication snapshot: ' + '; '.join(problems))
-                  sys.exit(1)
-              print(f"OK: {len(data.get('events', []))} public-source events")
-          else:
-              print("No public source snapshot exists; status-only dashboard expected, "
-                    "no silent fallback.")
-          status = Path('data/sbengaged-status.json')
-          if status.exists():
-              problems = validate_status(json.loads(status.read_text(encoding='utf8')))
-              if problems:
-                  print('REJECTED refresh status: ' + '; '.join(problems))
-                  sys.exit(1)
-          PYEOF
+        run: python scripts/validate_publication.py
       - name: Commit only generated public artifacts
         if: always() && steps.refresh.outcome != 'skipped' && steps.validate.outcome == 'success'
         run: |
+          python scripts/validate_publication.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add data/sbengaged-events.json data/sbengaged-status.json docs/dashboard.html
@@ -84,7 +62,7 @@ jobs:
                                       git checkout --theirs -- data/sbengaged-events.json data/sbengaged-status.json docs/dashboard.html
                                                     git add data/sbengaged-events.json data/sbengaged-status.json docs/dashboard.html
                                                                   GIT_EDITOR=true git rebase --continue
-                                                                              fi
+                                                                                fi
             git push
           fi
       - name: Surface a failed source refresh
