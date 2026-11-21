@@ -20,3 +20,5 @@ jobs:
           if [ -f pyproject.toml ]; then pip install -e ".[dev]" 2>/dev/null || pip install -e .; fi
       - name: Run tests
         run: python -m pytest tests/ -q
+      - name: Validate publication artifacts
+        run: python scripts/validate_publication.py

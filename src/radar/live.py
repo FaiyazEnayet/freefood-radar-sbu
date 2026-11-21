@@ -338,8 +338,14 @@ def refresh(root: Path, days: int = 14, now=None, fetcher=fetch_calendar, scorer
     now = now or datetime.now(timezone.utc)
     snapshot_path = root / "data/sbengaged-events.json"
     status_path = root / "data/sbengaged-status.json"
-    previous = json.loads(snapshot_path.read_text(encoding="utf8")) if snapshot_path.exists() else None
-    previous_status = json.loads(status_path.read_text(encoding="utf8")) if status_path.exists() else {}
+    try:
+        previous = json.loads(snapshot_path.read_text(encoding="utf8")) if snapshot_path.exists() else None
+    except ValueError:
+        raise ValueError("Invalid previous public snapshot: not valid JSON")
+    try:
+        previous_status = json.loads(status_path.read_text(encoding="utf8")) if status_path.exists() else {}
+    except ValueError:
+        raise ValueError("Invalid previous refresh status: not valid JSON")
     if previous is not None:
         problems = validate_snapshot(previous)
         if problems:

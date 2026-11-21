@@ -137,10 +137,15 @@ def test_stage3_freefood_radar_11_renderer_rejects_malformed_versioned_status(tm
 
 
 def test_stage3_freefood_radar_11_workflow_checks_both_records():
+    # P13 moved the inline record checks into scripts/validate_publication.py;
+    # the workflow still checks both records by calling that validator.
     workflow = (Path(__file__).resolve().parents[1] /
                 ".github/workflows/sbengaged.yml").read_text(encoding="utf8")
-    assert "validate_snapshot(data)" in workflow
-    assert "validate_status(json.loads" in workflow
+    assert "python scripts/validate_publication.py" in workflow
+    validator = (Path(__file__).resolve().parents[1] /
+                 "scripts/validate_publication.py").read_text(encoding="utf8")
+    assert "validate_snapshot(snapshot)" in validator
+    assert "validate_status(status)" in validator
 
 
 def test_stage3_freefood_radar_11_malformed_records_fail_closed(tmp_path):
